@@ -222,6 +222,10 @@ vault health, schema drift, and sync staleness — say "cortex status". Say
 - [mcp/cortex/README.md](mcp/cortex/README.md) — MCP server details
 - [ROADMAP.md](ROADMAP.md) — planned direction for future releases
 
+## Related
+
+- **[Cortex-Hub](https://github.com/JaySmith/Cortex-Hub)** — Multi-agent coordination layer. Registry, shared memory, and messaging for AI agents. Optionally sync vault notes across machines via Cortex-Hub's shared memory store.
+
 ## License
 
 MIT.
