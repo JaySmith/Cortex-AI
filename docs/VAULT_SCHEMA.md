@@ -2,6 +2,10 @@
 
 How to structure your Obsidian vault for distillation.
 
+> **For the canonical data model** (field definitions, types, hub value format),
+> see [`VAULT-NOTE-SCHEMA.md`](VAULT-NOTE-SCHEMA.md). This file covers directory
+> layout and frontmatter usage; that file covers the wire format.
+
 ## Directory Layout
 
 ```

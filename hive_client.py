@@ -9,14 +9,18 @@ Protocol:
   2. POST /mcp  {notifications/initialized}  → no response body
   3. POST /mcp  {tools/call}         → SSE text body, parse data: lines
 
-Dependencies: stdlib only (urllib.request, json, uuid).
+Dependencies: stdlib only (urllib.request, json, uuid, time, logging).
 """
 
 import json
+import logging
+import time
 import uuid
 import urllib.request
 import urllib.error
 from typing import Any
+
+log = logging.getLogger("hive_client")
 
 
 class HubConnectionError(Exception):
@@ -26,11 +30,15 @@ class HubConnectionError(Exception):
 class HubClient:
     """Connect to a cortex-hub MCP server and call tools."""
 
-    def __init__(self, url: str, token: str = "", timeout: int = 10):
+    def __init__(self, url: str, token: str = "", timeout: int = 10,
+                 max_retries: int = 5):
         self.url = url.rstrip("/")
         self.token = token
         self.timeout = timeout
+        self.max_retries = max_retries
         self.session_id: str | None = None
+        self.retry_count = 0
+        self._closing = False
 
     def connect(self) -> None:
         """MCP initialize handshake. Extracts session ID from response headers."""
@@ -58,27 +66,32 @@ class HubClient:
 
     def call_tool(self, name: str, args: dict[str, Any] | None = None) -> Any:
         """Call an MCP tool on the hub. Returns parsed result content."""
-        resp = self._raw_post({
-            "jsonrpc": "2.0",
-            "id": str(uuid.uuid4()),
-            "method": "tools/call",
-            "params": {"name": name, "arguments": args or {}},
-        })
-        for msg in self._parse_sse(resp["body"]):
-            # Check for JSON-RPC error
-            if "error" in msg:
-                raise HubConnectionError(
-                    f"Hub tool error on {name}: {msg['error']}"
-                )
-            if "result" in msg:
-                content = msg["result"].get("content", [])
-                if content and content[0].get("text"):
-                    text = content[0]["text"]
-                    try:
-                        return json.loads(text)
-                    except (json.JSONDecodeError, ValueError):
-                        return text
-        return None
+        try:
+            resp = self._raw_post({
+                "jsonrpc": "2.0",
+                "id": str(uuid.uuid4()),
+                "method": "tools/call",
+                "params": {"name": name, "arguments": args or {}},
+            })
+            for msg in self._parse_sse(resp["body"]):
+                # Check for JSON-RPC error
+                if "error" in msg:
+                    raise HubConnectionError(
+                        f"Hub tool error on {name}: {msg['error']}"
+                    )
+                if "result" in msg:
+                    content = msg["result"].get("content", [])
+                    if content and content[0].get("text"):
+                        text = content[0]["text"]
+                        try:
+                            return json.loads(text)
+                        except (json.JSONDecodeError, ValueError):
+                            return text
+            return None
+        except HubConnectionError:
+            if not self._closing:
+                return self._reconnect_and_retry(name, args)
+            raise
 
     def memory_set(self, key: str, value: str, tags: list[str] | None = None) -> Any:
         """Store a memory on the hub."""
@@ -99,9 +112,36 @@ class HubClient:
         return result if isinstance(result, list) else None
 
     def close(self) -> None:
+        self._closing = True
         self.session_id = None
 
     # --- Internal ---
+
+    def _reconnect_and_retry(
+        self, name: str, args: dict[str, Any] | None
+    ) -> Any:
+        """Reconnect to the hub and retry the failed tool call."""
+        if self.retry_count >= self.max_retries:
+            raise HubConnectionError(
+                f"Max retries ({self.max_retries}) exceeded"
+            )
+
+        self.retry_count += 1
+        delay_ms = min(1000 * (2 ** (self.retry_count - 1)), 30_000)
+        log.warning(
+            "Connection lost, reconnecting (retry %d/%d, delay %dms)...",
+            self.retry_count, self.max_retries, delay_ms,
+        )
+
+        time.sleep(delay_ms / 1000)
+        self.session_id = None
+
+        try:
+            self.connect()
+            self.retry_count = 0
+            return self.call_tool(name, args)
+        except HubConnectionError:
+            return self._reconnect_and_retry(name, args)
 
     def _headers(self) -> dict[str, str]:
         h: dict[str, str] = {
