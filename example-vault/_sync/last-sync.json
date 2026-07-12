@@ -1,0 +1,41 @@
+{
+  "timestamp": "2026-07-10T15:20:12.129067",
+  "note_count": 5,
+  "notes": {
+    "vault-capture-rules": {
+      "path": "feedback/vault-capture-rules.md",
+      "type": "feedback",
+      "tier": "core",
+      "updated": "2024-01-15",
+      "hash": "27f7889a720f147e8cc92e5e5dd24bf4"
+    },
+    "dev-preferences": {
+      "path": "feedback/dev-preferences.md",
+      "type": "feedback",
+      "tier": "core",
+      "updated": "2024-01-15",
+      "hash": "17daf6c347cc3c6d0045dad2e724fb91"
+    },
+    "2024-01-15-session": {
+      "path": "logs/2024-01-15-session.md",
+      "type": "session",
+      "tier": "vault-only",
+      "updated": "2024-01-15",
+      "hash": "cfd117be3e2486695947f2279e1dfc17"
+    },
+    "example-project": {
+      "path": "entities/projects/delivery/example-project.md",
+      "type": "entity",
+      "tier": "project",
+      "updated": "2024-01-15",
+      "hash": "eacd893f5b489f9d765c29bb93ef017c"
+    },
+    "tiered-memory": {
+      "path": "knowledge/patterns/tiered-memory.md",
+      "type": "knowledge",
+      "tier": "skill:example-skill",
+      "updated": "2024-01-15",
+      "hash": "3840470d1fc3fb6ab18c4b2dde6dbae4"
+    }
+  }
+}

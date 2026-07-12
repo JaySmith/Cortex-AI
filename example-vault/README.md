@@ -1,0 +1,22 @@
+# Example Vault
+
+A minimal starter vault so the distiller works the moment you clone the repo.
+It has one note per tier:
+
+| File | Tier | What it demonstrates |
+|------|------|----------------------|
+| `feedback/dev-preferences.md` | `core` | Eager note → `core-context.md` |
+| `feedback/vault-capture-rules.md` | `core` | Eager note (the agent's capture protocol) |
+| `knowledge/patterns/tiered-memory.md` | `skill:example-skill` | Lazy skill embed |
+| `entities/projects/delivery/example-project.md` | `project` | Per-project context file |
+| `logs/2024-01-15-session.md` | `vault-only` | Skipped (Obsidian-only) |
+
+The directory layout (`feedback/`, `knowledge/patterns/`, `entities/projects/<phase>/`,
+`logs/`) matches what the MCP `memory_write` tool expects, so agent-driven capture
+writes land in the right place.
+
+Run `./setup.sh` from the repo root to distill this vault and see the output in
+`example-vault/_sync/distilled/`.
+
+Once you understand the flow, run `./setup.sh` against your own vault. It
+generates a `cortex.yaml` at `<vault>/_sync/cortex.yaml` pointing at your paths.

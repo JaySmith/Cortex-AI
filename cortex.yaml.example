@@ -1,0 +1,103 @@
+# Cortex — Configuration
+# Customize these paths for your vault and output targets.
+# Copy this file to <vault>/_sync/cortex.yaml and edit.
+# (setup.sh generates it there for you.)
+
+vault_path: "/path/to/your/vault"
+
+# Which tiers are eagerly concatenated into core-context.md on every sync.
+# Any string listed here is treated as eager — "core" is the default.
+# Add extra names (e.g. "jira") to pull additional notes into the always-loaded file.
+eager_tiers:
+  - core
+
+# Directories (relative to vault root) to skip during scanning.
+# Dot-dirs (.*) and underscore-dirs (_*) are always skipped regardless.
+skip_dirs:
+  - templates
+  - archive
+  - Trash
+
+# Tags that exclude a note from ALL distillation targets
+exclude_tags:
+  - draft
+  - archived
+  - session-only
+
+# Note types that never leave the vault, regardless of tier
+vault_only_types:
+  - session
+  - log
+
+# ---------------------------------------------------------------------------
+# Distillation targets (output formats + locations)
+# ---------------------------------------------------------------------------
+targets:
+
+  # Tier-0 eager file consumed by opencode "instructions"
+  core_context:
+    enabled: true
+    type: core-context
+    output_file: "/path/to/distilled/opencode/core-context.md"
+
+    # Optional: automatically wire this file into opencode.jsonc "instructions"
+    opencode_config: "/path/to/.config/opencode/opencode.jsonc"
+
+    # WARNING: if true, deletes ANY unrecognised .md file in the same directory
+    # as core-context.md. Only enable if you are certain no other files live there.
+    # Default: false (safe)
+    prune_legacy: false
+
+  # Tier-1 lazy: heavy reference embedded into matching skill directories
+  skills:
+    enabled: true
+    type: skill-embed
+    skills_dir: "/path/to/.config/opencode/skills"
+    embed_filename: "reference.md"
+
+  # Project context: one .md file per tier:project note (lazy)
+  projects:
+    enabled: true
+    type: project-context
+    output_dir: "/path/to/distilled/opencode/projects"
+
+  # Structured JSON for Python agent frameworks
+  python-agents:
+    enabled: true
+    type: json
+    output_file: "/path/to/distilled/memory.json"
+    # Only include these note types in the JSON output
+    include_types:
+      - knowledge
+      - entity
+    # Additional exclusions for this target (beyond the top-level exclude_tags)
+    exclude_tags:
+      - draft
+      - archived
+      - internal
+
+  # Legacy flat-file format (usually disabled — opencode is the primary consumer)
+  claude-code:
+    enabled: false
+    type: flat-files
+    output_dir: "/path/to/.claude/memory"
+    index_file: "/path/to/.claude/MEMORY.md"
+
+# Replace [[wiki links]] with plain text when distilling?
+strip_wiki_links: true
+
+# ---------------------------------------------------------------------------
+# Hive — optional shared vault via cortex-hub
+# Enable to sync vault notes across machines through a cortex-hub instance.
+# See docs/HIVE-INTEGRATION.md for full details.
+# ---------------------------------------------------------------------------
+hive:
+  enabled: false
+  hub_url: "http://localhost:4096/mcp"
+  machine_id: ""            # e.g. "office-desktop", "laptop"
+  hub_token: ""             # bearer token auth (Phase 7+, leave empty for now)
+  replicate_tiers:
+    - core
+    - "skill:*"
+    - project
+  sync_interval: 300        # seconds between auto-sync, 0 = manual only

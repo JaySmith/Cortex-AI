@@ -1,0 +1,52 @@
+# Cortex — Configuration (example-vault, generated for local testing; gitignored)
+vault_path: "/Users/smithjay/Projects/cortex-distiller/example-vault"
+
+eager_tiers:
+  - core
+
+skip_dirs:
+  - templates
+  - archive
+  - Trash
+
+exclude_tags:
+  - draft
+  - archived
+  - session-only
+
+vault_only_types:
+  - session
+  - log
+
+targets:
+
+  core_context:
+    enabled: true
+    type: core-context
+    output_file: "/Users/smithjay/Projects/cortex-distiller/example-vault/_sync/distilled/opencode/core-context.md"
+    prune_legacy: false
+
+  skills:
+    enabled: true
+    type: skill-embed
+    skills_dir: "/Users/smithjay/Projects/cortex-distiller/example-vault/_sync/distilled/skills"
+    embed_filename: "reference.md"
+
+  projects:
+    enabled: true
+    type: project-context
+    output_dir: "/Users/smithjay/Projects/cortex-distiller/example-vault/_sync/distilled/opencode/projects"
+
+  python-agents:
+    enabled: true
+    type: json
+    output_file: "/Users/smithjay/Projects/cortex-distiller/example-vault/_sync/distilled/memory.json"
+    include_types:
+      - knowledge
+      - entity
+    exclude_tags:
+      - draft
+      - archived
+      - internal
+
+strip_wiki_links: true
