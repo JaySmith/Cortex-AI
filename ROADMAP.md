@@ -8,7 +8,7 @@ Current release: **1.2.2** (see `VERSION`).
 
 ---
 
-## Next — Cortex Hive (remote vault federation) 🚧 In Progress
+## Shipped — Cortex Hive (remote vault federation)
 
 Multiple agents on multiple machines share a centralized vault of long-term
 knowledge via cortex-hub. cortex-ai is the brain; cortex-hub is the nervous
@@ -27,7 +27,7 @@ auth and section-aware merge deferred to later phases.
 **Release impact:** MINOR (1.3.0). Schema bump v1→v2. No new hub tools —
 uses existing `hub_memory_*` API. No changes to cortex-hub.
 
-**Status:** Phases 1–6 implemented. Phase 7 (bearer auth) pending.
+**Status:** Phases 1–6 implemented and committed. Phase 7 (bearer auth) deferred.
 - Phase 1: Config + schema migration ✅
 - Phase 2: Python hub client (`hive_client.py`) ✅
 - Phase 3: CLI commands (`--hive-push/pull/status`) ✅
