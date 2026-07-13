@@ -1,6 +1,6 @@
 {
   "name": "cortex-memory-mcp",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "type": "module",
   "description": "MCP server for querying and writing the Cortex vault (search, get, related, write, reload)",
   "main": "build/index.js",

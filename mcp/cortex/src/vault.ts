@@ -167,6 +167,7 @@ export function findVaultFile(id: string): string | null {
     "knowledge/calendars",
     "feedback",
     "decisions",
+    "risks",
     "logs",
   ];
 
@@ -218,6 +219,9 @@ export function resolveWritePath(params: WriteNoteParams): string {
       break;
     case "decision":
       dir = "decisions";
+      break;
+    case "risk":
+      dir = "risks";
       break;
     case "session":
     case "log":

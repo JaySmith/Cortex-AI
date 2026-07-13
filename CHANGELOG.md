@@ -92,6 +92,17 @@ python3 cortex-uninstall.py --vault <vault> --latest --apply  # revert
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-07-13
+
+### Added
+- **`risk` note type is now first-class in the MCP tool and vault layout.** The
+  capture rules already described `risk` as a first-class type and `cortex.yaml`
+  already indexed it (`include_types`), but the `memory_write` MCP tool rejected
+  it and `resolveWritePath` had no home for it. Added `"risk"` to the tool's type
+  enum and description, gave it its own `risks/` directory (parallel to
+  `decisions/`), and taught `findVaultFile` to look there. Risk notes now write
+  correctly and are searchable. Additive — no schema bump.
+
 ## [1.3.0] — 2026-07-13
 
 ### Added

@@ -207,13 +207,13 @@ server.registerTool(
       "to patch it rather than create a duplicate.\n\n" +
       "Use for: preferences/corrections (feedback), patterns or solutions learned " +
       "(knowledge), significant decisions (decision), project status changes (entity), " +
-      "session summaries (session).",
+      "identified threats to success (risk), session summaries (session).",
     inputSchema: {
       id: z
         .string()
         .describe("Note id slug — lowercase, hyphens, no spaces (e.g. 'jira-bulk-transition')"),
       type: z
-        .enum(["knowledge", "entity", "feedback", "decision", "session", "log"])
+        .enum(["knowledge", "entity", "feedback", "decision", "risk", "session", "log"])
         .describe("Note type"),
       tier: z
         .string()
