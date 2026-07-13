@@ -15,8 +15,8 @@ Capture (agent → vault):   agent  → memory_write  → note written → disti
 Requires **Python 3.10+** and **Node 18+**.
 
 ```bash
-git clone <this-repo-url> cortex-distiller
-cd cortex-distiller
+git clone https://github.com/JaySmith/Cortex-AI.git cortex-ai
+cd cortex-ai
 ./setup.sh
 ```
 
@@ -203,7 +203,7 @@ cortex.yaml.example     Config template (setup.sh generates a real one at <vault
 mcp/cortex/             MCP server (runtime read + capture)
 skills/cortex-ai/       opencode skill (setup.sh installs it, filling in real paths)
 example-vault/          Starter vault — one note per tier, works out of the box
-docs/                   overview, QUICKSTART, VAULT_SCHEMA, EXTENDING, architecture
+docs/                   overview, QUICKSTART, DEVELOPMENT, VAULT_SCHEMA, EXTENDING, architecture
 ```
 
 The `version` command in the skill reports the release version (`VERSION`), the
@@ -216,6 +216,7 @@ vault health, schema drift, and sync staleness — say "cortex status". Say
 
 - [docs/overview.md](docs/overview.md) — what Cortex is and why
 - [docs/QUICKSTART.md](docs/QUICKSTART.md) — manual setup + troubleshooting
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) — contributing: dev setup, dev loop, releasing
 - [docs/VAULT_SCHEMA.md](docs/VAULT_SCHEMA.md) — frontmatter reference
 - [docs/EXTENDING.md](docs/EXTENDING.md) — add custom output targets
 - [docs/DISTILLATION_SUMMARY.md](docs/DISTILLATION_SUMMARY.md) — architecture
