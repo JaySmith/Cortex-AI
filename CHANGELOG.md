@@ -92,6 +92,23 @@ python3 cortex-uninstall.py --vault <vault> --latest --apply  # revert
 
 ## [Unreleased]
 
+### Added
+- **Purge for spent session artifacts.** New `distill.py --purge` (preview) and
+  `--purge-apply` (delete + rebuild) flags remove `log` and `session` notes flagged
+  `drained: true` in frontmatter. A drained note has already had its durable
+  lessons extracted into knowledge/entity notes, so the raw file is dead weight.
+  Only ever touches types `log`/`session`, and only when `drained: true` is
+  explicitly set — no other note is at risk. `VaultNote` gained a `drained`
+  attribute; the field is additive and ignored by every distillation target, so no
+  schema bump is needed.
+
+### Changed
+- **`cortex sync` is now capture-then-rebuild-then-drain.** After capture and
+  rebuild, the sync step marks prior-session `log`/`session` notes `drained: true`
+  and runs `--purge-apply`, keeping the vault free of spent session logs. Ongoing
+  logs (`hardware-incidents`, any non-date-prefixed id) are protected and never
+  drained. Added a standalone `purge` command to the `cortex-ai` skill.
+
 ### Docs
 - Added `ROADMAP.md` — planned direction for future releases (Cortex Hive remote
   vault federation, cross-platform parity, someday vector retrieval). Linked from

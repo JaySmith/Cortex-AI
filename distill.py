@@ -17,6 +17,8 @@ Usage:
   python3 distill.py --dry-run              # show changes without writing
   python3 distill.py --list                 # list all vault notes with tier
   python3 distill.py --show-config          # print resolved paths as JSON
+  python3 distill.py --purge                # preview drained log/session deletions
+  python3 distill.py --purge-apply          # delete drained logs/sessions + rebuild
   python3 distill.py --config /path/to.yaml # use a specific config file
 """
 
@@ -372,6 +374,7 @@ class VaultNote:
         self.agents: list[str] = self._as_list(meta.get("agents"))
         self.aliases: list[str] = self._as_list(meta.get("aliases"))
         self.updated: str = self._as_str(meta.get("updated"))
+        self.drained: bool = meta.get("drained") is True  # log/session lessons extracted -> safe to purge
         self.hive: bool | None = None  # None = use tier default, True = force sync, False = never sync
         raw_hive = meta.get("hive")
         if raw_hive is True:
@@ -722,6 +725,57 @@ def save_sync_state(vault_path: Path, notes: list[VaultNote]) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Purge — delete spent session artifacts
+#
+# A `log` or `session` note flagged `drained: true` has had its durable lessons
+# extracted into knowledge/entity notes (that's what the sync capture step does),
+# so the raw session file is now dead weight. Purge deletes those files and
+# nothing else: only types log/session, only when drained is explicitly true.
+# Dry-run by default; the caller re-runs distillation after an apply so the
+# distilled outputs and last-sync.json reflect the smaller vault.
+# ---------------------------------------------------------------------------
+
+PURGEABLE_TYPES = ("log", "session")
+
+
+def find_drained_notes(notes: list[VaultNote]) -> list[VaultNote]:
+    """Return notes eligible for purge: type in PURGEABLE_TYPES and drained is true."""
+    return [
+        n for n in notes
+        if n.note_type in PURGEABLE_TYPES and n.drained
+    ]
+
+
+def purge_drained_logs(vault_path: Path, apply: bool) -> list[VaultNote]:
+    """Delete drained log/session notes from the vault.
+
+    apply=False (default) previews; apply=True deletes the files. Returns the
+    list of notes that were (or would be) deleted. The caller is responsible for
+    re-running distillation after an apply.
+    """
+    skip_dirs: set[str] = {"templates"}
+    notes = scan_vault(vault_path, skip_dirs)
+    drained = find_drained_notes(notes)
+
+    print(f"\n--- purge: {len(drained)} drained log/session note(s) ---")
+    if not drained:
+        print("  nothing to purge (no notes flagged drained: true)")
+        return []
+
+    for n in drained:
+        rel = n.path.relative_to(vault_path)
+        if apply:
+            n.path.unlink()
+            print(f"  deleted {rel}")
+        else:
+            print(f"  [DRY] would delete {rel}  (type={n.note_type})")
+
+    if not apply:
+        print("\n  [DRY RUN] No files were deleted. Re-run with --purge-apply to delete.")
+    return drained
+
+
+# ---------------------------------------------------------------------------
 # --show-config
 # ---------------------------------------------------------------------------
 
@@ -992,6 +1046,16 @@ def main() -> None:
     ap.add_argument("--hive-push", action="store_true", help="Push vault notes to hub")
     ap.add_argument("--hive-pull", action="store_true", help="Pull vault notes from hub")
     ap.add_argument("--hive-status", action="store_true", help="Show hive connection status")
+    ap.add_argument(
+        "--purge",
+        action="store_true",
+        help="Preview deletion of drained log/session notes (drained: true), then exit",
+    )
+    ap.add_argument(
+        "--purge-apply",
+        action="store_true",
+        help="Delete drained log/session notes and rebuild distilled outputs",
+    )
     args = ap.parse_args()
 
     cfg_path = Path(args.config)
@@ -1022,6 +1086,18 @@ def main() -> None:
     if args.check:
         run_check(vault)
         return
+
+    # Purge (preview): list drained log/session notes and exit without touching
+    # anything else. Apply mode deletes then falls through to a full rebuild so
+    # distilled outputs + last-sync.json reflect the smaller vault.
+    if args.purge and not args.purge_apply:
+        purge_drained_logs(vault, apply=False)
+        return
+    if args.purge_apply:
+        deleted = purge_drained_logs(vault, apply=True)
+        if not deleted:
+            return  # nothing removed — no need to rebuild
+        print("\n==> Rebuilding distilled outputs after purge...")
 
     # Reconcile on-disk schema before doing any work (may run migrations).
     check_and_migrate(vault, args.dry_run)

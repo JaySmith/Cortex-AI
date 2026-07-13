@@ -260,12 +260,13 @@ After import: review notes tagged `review` in `<vault>/feedback/`, adjust
 
 ### sync
 
-A sync is **capture-then-rebuild**, not just a rebuild. "Sync" is the moment to
-reconcile everything worth remembering from the current session into the vault
-*before* regenerating distilled outputs — otherwise the rebuild just re-emits
-stale knowledge and the session's lessons are lost.
+A sync is **capture-then-rebuild-then-drain**, not just a rebuild. "Sync" is the
+moment to reconcile everything worth remembering from the current session into the
+vault *before* regenerating distilled outputs — otherwise the rebuild just re-emits
+stale knowledge and the session's lessons are lost. Once the lessons are safely
+distilled, the spent session artifacts are drained and purged.
 
-**Always run these two steps in order:**
+**Always run these three steps in order:**
 
 1. **Capture first.** Run the `capture` command reflex (see above): scan the
    session against the `vault-capture-rules` triggers (preferences/corrections,
@@ -279,14 +280,63 @@ stale knowledge and the session's lessons are lost.
    python3 <CORTEX_HOME>/distill.py
    ```
    (Add `--config <vault>/_sync/cortex.yaml` if the config isn't next to
-   `distill.py`.) Print the full output. Confirm success on completion.
+   `distill.py`.) Print the full output.
 
-Report both halves: what was captured (ids + created/updated), then the distill
-result. Individual `cortex_memory_write` calls already trigger distillation, so
-step 2 is mainly for bulk rebuilds after many manual edits — but step 1 is the
-point of a sync.
+3. **Then drain spent session artifacts.** Once step 1 has extracted every durable
+   lesson into knowledge/entity notes, the raw `log` and `session` files from
+   **prior** sessions are dead weight. Mark them drained and purge them:
+
+   a. For each `log`/`session` note written *before this session*, patch its
+      frontmatter with `drained: true` via
+      `cortex_memory_write(id, ..., update: true)`. **Never** drain a note you
+      wrote in the current session — its lessons may not be captured yet.
+
+   b. **Protected notes — never drain these** (ongoing logs, not one-shot session
+      artifacts):
+      - `hardware-incidents` — a running incident log, appended over time.
+      - Any note whose id does **not** start with a `YYYY-MM-DD-` date prefix is
+        presumed an ongoing log; leave it unless the user says otherwise.
+
+   c. Purge the flagged files (preview first, then apply):
+      ```bash
+      python3 <CORTEX_HOME>/distill.py --purge        # preview
+      python3 <CORTEX_HOME>/distill.py --purge-apply  # delete + rebuild
+      ```
+      `--purge-apply` deletes the drained files and rebuilds distilled outputs in
+      one pass.
+
+Report all three parts: what was captured (ids + created/updated), the distill
+result, and what was drained/purged (ids). Individual `cortex_memory_write` calls
+already trigger distillation, so step 2 is mainly for bulk rebuilds after many
+manual edits — but step 1 is the point of a sync, and step 3 keeps the vault free
+of spent session logs.
 
 Trigger phrases: "sync", "cortex sync", "sync my vault".
+
+---
+
+### purge `[--apply]`
+
+Delete spent session artifacts — `log` and `session` notes flagged
+`drained: true` in their frontmatter. A drained note has already had its durable
+lessons extracted into knowledge/entity notes (that's what the sync capture step
+does), so the raw file is dead weight.
+
+Preview first, then apply on confirmation:
+```bash
+python3 <CORTEX_HOME>/distill.py --purge        # list candidates
+python3 <CORTEX_HOME>/distill.py --purge-apply  # delete + rebuild
+```
+
+- Only touches types `log` and `session`, and only when `drained: true` is set.
+- `--purge-apply` deletes the files and rebuilds distilled outputs in one pass.
+- **Protected:** `hardware-incidents` and any non-date-prefixed id are ongoing
+  logs — never flag them drained (see the `sync` step-3 guardrails).
+
+Normally you don't invoke this directly — `cortex sync` runs the drain step
+automatically. Use it standalone to clean up after manual `drained: true` edits.
+
+Trigger phrases: "cortex purge", "purge drained logs", "clean up logs".
 
 ---
 
