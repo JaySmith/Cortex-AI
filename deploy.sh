@@ -115,7 +115,7 @@ echo
 
 # --- Deploy distiller --------------------------------------------------------
 echo "==> [2/5] Distiller -> $DISTILLER_HOME"
-for f in distill.py cortex-import.py cortex-uninstall.py gen-portfolio.py \
+for f in distill.py hive_client.py cortex-import.py cortex-uninstall.py gen-portfolio.py \
          VERSION SCHEMA_VERSION CHANGELOG.md; do
   [ -f "$REPO_ROOT/$f" ] || continue
   run cp -p "$REPO_ROOT/$f" "$DISTILLER_HOME/$f"

@@ -8,14 +8,15 @@ description: Work with the Cortex vault — search notes, list by tier/type, add
 Persistent, tiered memory for AI agents. Notes live in an Obsidian-style vault and
 are distilled into agent-consumable files; an MCP server serves them at runtime.
 
-> **Paths.** `setup.sh` bakes in only `<CORTEX_HOME>` (the cloned repo). Everything
-> vault-related is resolved at runtime — never hard-code a vault path.
+> **Paths.** `<CORTEX_HOME>` is the deployed Cortex runtime — the scripts agents
+> actually run. Everything vault-related is resolved at runtime — never hard-code
+> a vault path.
 >
-> - Cortex home (code): `<CORTEX_HOME>` (the cloned repo)
+> - Cortex home (deployed runtime): `<CORTEX_HOME>`
 > - Distiller: `<CORTEX_HOME>/distill.py`
 > - VERSION file: `<CORTEX_HOME>/VERSION`
 > - MCP server: `<CORTEX_HOME>/mcp/cortex/`
-> - Config: `<vault>/_sync/cortex.yaml` (discover it, don't assume — see below)
+> - Config: `<CORTEX_HOME>/cortex.yaml` (co-located — no `--config` flag needed)
 >
 > **Interpreter.** Always invoke the Python scripts with plain `python3` — never
 > the venv interpreter directly. `distill.py` and `gen-portfolio.py` self-bootstrap:

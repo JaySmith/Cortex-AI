@@ -11,3 +11,6 @@ build/
 *~
 .env
 __MACOSX/
+
+# Live config belongs at <vault>/_sync/cortex.yaml, never in the repo
+cortex.yaml
