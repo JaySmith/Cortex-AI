@@ -105,27 +105,27 @@ tier: vault-only       → Never distilled (Obsidian only)
 
 ---
 
-## Your Production Configuration
+## Example Production Configuration
 
-From `/Users/smithjay/Cortex/_sync/cortex.yaml`:
+A typical `~/Cortex/_sync/cortex.yaml` (adjust paths to your own vault):
 
 ```yaml
-vault_path: /Users/smithjay/Cortex
+vault_path: ~/Cortex
 
 targets:
   core_context:
-    output: /Users/smithjay/Cortex/_sync/distilled/opencode/core-context.md
-    opencode_config: /Users/smithjay/.config/opencode/opencode.jsonc
+    output: ~/Cortex/_sync/distilled/opencode/core-context.md
+    opencode_config: ~/.config/opencode/opencode.jsonc
   
   skills:
-    skills_dir: /Users/smithjay/.config/opencode/skills
+    skills_dir: ~/.config/opencode/skills
     embed_filename: reference.md
   
   projects:
-    output_dir: /Users/smithjay/Cortex/_sync/distilled/opencode/projects
+    output_dir: ~/Cortex/_sync/distilled/opencode/projects
   
   python-agents:
-    output: /Users/smithjay/Cortex/_sync/distilled/memory.json
+    output: ~/Cortex/_sync/distilled/memory.json
     include_types: [knowledge, entity]
 ```
 

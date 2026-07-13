@@ -125,7 +125,7 @@ In `cortex.yaml`:
 ```yaml
 targets:
   core_context:
-    opencode_config: "/Users/smithjay/.config/opencode/opencode.jsonc"
+    opencode_config: "~/.config/opencode/opencode.jsonc"
 ```
 
 Now when you run `distill.py`, it updates the `"instructions"` array to point to core-context.md.
