@@ -92,6 +92,8 @@ python3 cortex-uninstall.py --vault <vault> --latest --apply  # revert
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-07-13
+
 ### Added
 - **Purge for spent session artifacts.** New `distill.py --purge` (preview) and
   `--purge-apply` (delete + rebuild) flags remove `log` and `session` notes flagged
