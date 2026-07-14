@@ -152,11 +152,23 @@ export function findVaultFile(id: string): string | null {
   if (!_vaultRoot) return null;
   const root = _vaultRoot;
 
-  // Search common vault subdirs for a matching .md file
+  // Search common vault subdirs for a matching .md file.
+  //
+  // The `entities/projects/{delivery,completed,discovery}` phase subdirs are
+  // DEPRECATED and retained only as a legacy fallback so notes written before
+  // the phase-folder flattening are still found and updated in place. Phase is
+  // now a frontmatter attribute, not a location, and new project notes are
+  // always written to the flat `entities/projects/` dir (see resolveWritePath).
+  //
+  // TODO(remove-next-release): once all vaults have been migrated (phase folders
+  // flattened into entities/projects/), delete the three phase-subdir entries
+  // below. Tracked as the phase-as-attribute migration.
   const dirs = [
+    // --- DEPRECATED phase subdirs (legacy fallback; remove next release) ---
     "entities/projects/delivery",
     "entities/projects/completed",
     "entities/projects/discovery",
+    // --- canonical ---
     "entities/projects",
     "entities/people",
     "entities/systems",
@@ -202,15 +214,28 @@ export interface WriteNoteResult {
 }
 
 /**
- * Resolve the absolute vault path for a new note from its type + category (+ phase).
- * Mirrors the directory map used by findVaultFile and the cortex-ai skill.
+ * Resolve the absolute vault path for a note from its type + category.
+ *
+ * Identity is the note `id`; phase/state are frontmatter attributes, NOT
+ * locations. Projects therefore always resolve to a single flat directory
+ * (`entities/projects/<id>.md`) — `phase` lives in frontmatter, never in the
+ * path. This prevents the duplicate-id class of bug where the same id ended up
+ * in both `entities/projects/<id>.md` and `entities/projects/<phase>/<id>.md`.
+ *
+ * Dup-proofing: if a note with this id already exists ANYWHERE in the vault
+ * (including legacy phase subdirs, pre-migration), we return that existing path
+ * so the write patches the note in place instead of creating a second file.
  */
 export function resolveWritePath(params: WriteNoteParams): string {
   if (!_vaultRoot) throw new Error("Vault not initialized");
   const root = _vaultRoot;
-  const { type, category, phase, id } = params;
+  const { type, category, id } = params;
   const cat = (category || "").toLowerCase();
-  const ph = (phase || "").toLowerCase();
+
+  // If the note already exists somewhere, always write to that same file.
+  // Never create a second file for an id that already lives in the vault.
+  const existing = findVaultFile(id);
+  if (existing) return existing;
 
   let dir: string;
   switch (type) {
@@ -236,11 +261,8 @@ export function resolveWritePath(params: WriteNoteParams): string {
       break;
     case "entity":
       if (cat === "projects") {
-        if (["delivery", "discovery", "completed"].includes(ph)) {
-          dir = join("entities", "projects", ph);
-        } else {
-          dir = join("entities", "projects");
-        }
+        // Flat: phase is a frontmatter attribute, not a subdirectory.
+        dir = join("entities", "projects");
       } else if (["people", "systems", "teams"].includes(cat)) {
         dir = join("entities", cat);
       } else {
