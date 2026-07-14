@@ -65,7 +65,6 @@ echo
 
 # --- Preflight ---------------------------------------------------------------
 [ -d "$VAULT_ROOT" ]   || { echo "ERROR: vault not found: $VAULT_ROOT" >&2; exit 1; }
-[ -d "$MCP_HOME" ]     || { echo "ERROR: MCP home not found: $MCP_HOME (run setup.sh first?)" >&2; exit 1; }
 [ -f "$REPO_ROOT/mcp/cortex/build/index.js" ] || {
   echo "ERROR: MCP not built. Run: (cd mcp/cortex && npm run build)" >&2; exit 1; }
 
@@ -91,7 +90,7 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 BK="$VAULT_ROOT/_sync/backups/$STAMP-deploy-$REL_VER"
 run() { if [ "$APPLY" = 1 ]; then "$@"; else echo "    [DRY] $*"; fi; }
 
-echo "==> [1/5] Backup live targets -> $BK"
+echo "==> [1/6] Backup live targets -> $BK"
 if [ "$APPLY" = 1 ]; then mkdir -p "$BK"; fi
 backup() {
   # $1 = source path to snapshot (file or dir)
@@ -114,7 +113,7 @@ backup "$VAULT_ROOT/_sync/distilled/memory.json"
 echo
 
 # --- Deploy distiller --------------------------------------------------------
-echo "==> [2/5] Distiller -> $DISTILLER_HOME"
+echo "==> [2/6] Distiller -> $DISTILLER_HOME"
 for f in distill.py hive_client.py cortex-import.py cortex-uninstall.py gen-portfolio.py \
          VERSION SCHEMA_VERSION CHANGELOG.md; do
   [ -f "$REPO_ROOT/$f" ] || continue
@@ -123,18 +122,22 @@ done
 echo
 
 # --- Deploy MCP --------------------------------------------------------------
-echo "==> [3/5] MCP server -> $MCP_HOME"
+echo "==> [3/6] MCP server -> $MCP_HOME"
+run mkdir -p "$MCP_HOME/build"
 run cp -pR "$REPO_ROOT/mcp/cortex/build/." "$MCP_HOME/build/"
 run cp -p "$REPO_ROOT/mcp/cortex/package.json" "$MCP_HOME/package.json"
 run cp -p "$REPO_ROOT/VERSION" "$MCP_HOME/VERSION"
 run cp -p "$REPO_ROOT/SCHEMA_VERSION" "$MCP_HOME/SCHEMA_VERSION"
+if [ "$APPLY" = 1 ]; then
+  (cd "$MCP_HOME" && npm install --silent 2>/dev/null) || echo "    WARNING: npm install failed in $MCP_HOME"
+fi
 echo
 
 # --- Deploy skill ------------------------------------------------------------
 # The skill uses <CORTEX_HOME> for the distiller + companions (the vault-resident
 # _sync dir). But the MCP lives elsewhere in this split layout, so after the
 # <CORTEX_HOME> substitution we rewrite the two MCP path references to $MCP_HOME.
-echo "==> [4/5] Skill -> $SKILL_HOME"
+echo "==> [4/6] Skill -> $SKILL_HOME"
 if [ "$APPLY" = 1 ]; then
   mkdir -p "$SKILL_HOME"
   sed -e "s#<CORTEX_HOME>#$DISTILLER_HOME#g" \
@@ -146,8 +149,51 @@ else
 fi
 echo
 
+# --- Upsert opencode.json ---------------------------------------------------
+echo "==> [5/6] opencode.json"
+OPENCODE_JSON="$HOME/.config/opencode/opencode.json"
+MEMORY_JSON="$DISTILLER_HOME/distilled/memory.json"
+MCP_ENTRY="$MCP_HOME/build/index.js"
+PYTHON_UPSERT="$DISTILLER_HOME/.venv/bin/python"
+[ -x "$PYTHON_UPSERT" ] || PYTHON_UPSERT="$REPO_ROOT/.venv/bin/python"
+[ -x "$PYTHON_UPSERT" ] || PYTHON_UPSERT="python3"
+if [ "$APPLY" = 1 ]; then
+  if [ -f "$OPENCODE_JSON" ]; then
+    "$PYTHON_UPSERT" - "$OPENCODE_JSON" "$MCP_ENTRY" "$MEMORY_JSON" "$VAULT_ROOT" "$REPO_ROOT/distill.py" "$PYTHON_UPSERT" <<'PY'
+import json, sys
+from pathlib import Path
+opencode_json, mcp_entry, memory_json, vault_root, distill_script, distill_python = sys.argv[1:7]
+p = Path(opencode_json)
+cfg = json.loads(p.read_text())
+mcp = cfg.setdefault("mcp", {})
+mcp["cortex"] = {
+    "type": "local",
+    "command": ["node", mcp_entry],
+    "environment": {
+        "MEMORY_JSON": memory_json,
+        "VAULT_ROOT": vault_root,
+        "DISTILL_SCRIPT": distill_script,
+        "DISTILL_PYTHON": distill_python,
+    },
+    "enabled": True,
+}
+p.write_text(json.dumps(cfg, indent=2) + "\n")
+# Validate: opencode MCP config must use "environment", not "env"
+if "env" in mcp.get("cortex", {}):
+    print(f"    ERROR: cortex MCP entry uses deprecated 'env' key — must be 'environment'")
+    sys.exit(1)
+print(f"    upserted cortex MCP entry in {opencode_json}")
+PY
+  else
+    echo "    WARNING: $OPENCODE_JSON not found — skipping"
+  fi
+else
+  echo "    [DRY] upsert cortex MCP entry in $OPENCODE_JSON"
+fi
+echo
+
 # --- Re-distill --------------------------------------------------------------
-echo "==> [5/5] Re-distill live vault"
+echo "==> [6/6] Re-distill live vault"
 PYTHON="$DISTILLER_HOME/.venv/bin/python"
 [ -x "$PYTHON" ] || PYTHON="$REPO_ROOT/.venv/bin/python"
 [ -x "$PYTHON" ] || PYTHON="python3"

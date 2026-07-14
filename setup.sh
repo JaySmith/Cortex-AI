@@ -2,9 +2,9 @@
 #
 # setup.sh — one-shot bootstrap for Cortex.
 #
-# Installs Python deps, builds the MCP server, wires the distiller to the bundled
-# example vault, runs a first distill, installs the cortex-ai skill, and prints
-# ready-to-paste MCP config.
+# Installs Python deps, builds and deploys the MCP server, wires the distiller
+# to the bundled example vault, runs a first distill, installs the cortex-ai
+# skill, and upserts the opencode.json MCP entry.
 #
 # Usage:
 #   ./setup.sh                 # interactive: prompts for vault path + skills dir
@@ -21,6 +21,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEFAULT_VAULT="$REPO_ROOT/example-vault"
 DEFAULT_SKILLS="$HOME/.config/opencode/skills"
+DEFAULT_MCP="$HOME/.config/opencode/mcp/cortex"
 
 # Only prompt when running interactively (a TTY) and the value wasn't supplied.
 prompt_for() {
@@ -51,6 +52,8 @@ fi
 # Expand a leading ~ if the user typed one.
 VAULT_ROOT="${VAULT_ROOT/#\~/$HOME}"
 OPENCODE_SKILLS_DIR="${OPENCODE_SKILLS_DIR/#\~/$HOME}"
+
+MCP_HOME="$DEFAULT_MCP"
 
 if [ ! -d "$VAULT_ROOT" ]; then
   echo "ERROR: vault path does not exist: $VAULT_ROOT" >&2
@@ -93,7 +96,7 @@ record_action() {
 }
 
 # --- 1. Python environment ---------------------------------------------------
-echo "==> [1/5] Python environment"
+echo "==> [1/7] Python environment"
 if ! command -v python3 >/dev/null 2>&1; then
   echo "ERROR: python3 not found on PATH." >&2
   exit 1
@@ -108,7 +111,7 @@ echo "    deps installed into .venv"
 echo
 
 # --- 2. Build the MCP server -------------------------------------------------
-echo "==> [2/5] MCP server build"
+echo "==> [2/7] MCP server build"
 if ! command -v npm >/dev/null 2>&1; then
   echo "WARNING: npm not found — skipping MCP build. Install Node 18+ and run:"
   echo "         (cd mcp/cortex && npm install && npm run build)"
@@ -118,8 +121,27 @@ else
 fi
 echo
 
+# --- 3. Deploy MCP server to ~/.config/opencode/mcp/cortex/ ------------------
+echo "==> [3/7] Deploy MCP server"
+if [ ! -d "$REPO_ROOT/mcp/cortex/build" ]; then
+  echo "    WARNING: MCP not built — skipping deploy"
+elif ! command -v npm >/dev/null 2>&1; then
+  echo "    WARNING: npm not found — skipping MCP deploy"
+else
+  mkdir -p "$MCP_HOME/build"
+  cp -p "$REPO_ROOT/mcp/cortex/build/index.js" "$MCP_HOME/build/index.js"
+  cp -p "$REPO_ROOT/mcp/cortex/build/vault.js" "$MCP_HOME/build/vault.js" 2>/dev/null || true
+  cp -p "$REPO_ROOT/mcp/cortex/build/hub-client.js" "$MCP_HOME/build/hub-client.js" 2>/dev/null || true
+  cp -p "$REPO_ROOT/mcp/cortex/package.json" "$MCP_HOME/package.json"
+  cp -p "$REPO_ROOT/VERSION" "$MCP_HOME/VERSION"
+  cp -p "$REPO_ROOT/SCHEMA_VERSION" "$MCP_HOME/SCHEMA_VERSION"
+  (cd "$MCP_HOME" && npm install --silent 2>/dev/null) || echo "    WARNING: npm install failed in $MCP_HOME"
+  echo "    deployed MCP -> $MCP_HOME"
+fi
+echo
+
 # --- 3. Generate cortex.yaml (only if missing) -------------------------------
-echo "==> [3/5] Config"
+echo "==> [4/7] Config"
 mkdir -p "$(dirname "$CONFIG_FILE")"
 if [ -f "$CONFIG_FILE" ]; then
   echo "    $CONFIG_FILE already exists — leaving it untouched"
@@ -180,7 +202,7 @@ fi
 echo
 
 # --- 4. Ensure skill target dirs exist, then distill -------------------------
-echo "==> [4/6] First distill"
+echo "==> [5/7] First distill"
 # The distiller only writes skill reference.md into dirs that already exist.
 # Pre-create any skill dirs referenced by skill:<name> notes in the vault.
 "$PYTHON" - "$VAULT_ROOT" "$SKILLS_DIR" <<'PY'
@@ -201,8 +223,8 @@ PY
 "$PYTHON" "$REPO_ROOT/distill.py" --config "$CONFIG_FILE"
 echo
 
-# --- 5. Install the cortex-ai skill (opencode) -------------------------------
-echo "==> [5/6] Skill install"
+# --- 5. Install the cortex-ai skill + upsert opencode.json -------------------
+echo "==> [6/7] Skill + opencode.json"
 SKILL_SRC="$REPO_ROOT/skills/cortex-ai/SKILL.md"
 if [ -f "$SKILL_SRC" ]; then
   SKILL_DEST_DIR="$OPENCODE_SKILLS_DIR/cortex-ai"
@@ -223,6 +245,39 @@ if [ -f "$SKILL_SRC" ]; then
   echo "    installed skill -> $SKILL_DEST"
 else
   echo "    WARNING: skill source not found at $SKILL_SRC — skipping"
+fi
+
+# Upsert cortex MCP entry in opencode.json
+OPENCODE_JSON="$HOME/.config/opencode/opencode.json"
+if [ -f "$OPENCODE_JSON" ]; then
+  MCP_ENTRY="$MCP_HOME/build/index.js"
+  python3 - "$OPENCODE_JSON" "$MCP_ENTRY" "$MEMORY_JSON" "$VAULT_ROOT" "$REPO_ROOT/distill.py" "$PYTHON" <<'PY'
+import json, sys
+from pathlib import Path
+opencode_json, mcp_entry, memory_json, vault_root, distill_script, distill_python = sys.argv[1:7]
+p = Path(opencode_json)
+cfg = json.loads(p.read_text())
+mcp = cfg.setdefault("mcp", {})
+mcp["cortex"] = {
+    "type": "local",
+    "command": ["node", mcp_entry],
+    "environment": {
+        "MEMORY_JSON": memory_json,
+        "VAULT_ROOT": vault_root,
+        "DISTILL_SCRIPT": distill_script,
+        "DISTILL_PYTHON": distill_python,
+    },
+    "enabled": True,
+}
+p.write_text(json.dumps(cfg, indent=2) + "\n")
+# Validate: opencode MCP config must use "environment", not "env"
+if "env" in mcp.get("cortex", {}):
+    print(f"    ERROR: cortex MCP entry uses deprecated 'env' key — must be 'environment'")
+    sys.exit(1)
+print(f"    upserted cortex MCP entry in {opencode_json}")
+PY
+else
+  echo "    WARNING: $OPENCODE_JSON not found — skipping MCP config"
 fi
 echo
 
@@ -261,47 +316,12 @@ else
 fi
 echo
 
-# --- 6. Print MCP config snippets --------------------------------------------
-echo "==> [6/6] Done. Wire the MCP server into your agent:"
-echo
-MCP_ENTRY="$REPO_ROOT/mcp/cortex/build/index.js"
-cat <<SNIPPET
-  ── opencode (opencode.jsonc) ────────────────────────────────────
-  "mcp": {
-    "cortex": {
-      "type": "local",
-      "command": ["node", "$MCP_ENTRY"],
-      "enabled": true,
-      "environment": {
-        "MEMORY_JSON": "$MEMORY_JSON",
-        "VAULT_ROOT": "$VAULT_ROOT",
-        "DISTILL_SCRIPT": "$REPO_ROOT/distill.py",
-        "DISTILL_PYTHON": "$PYTHON"
-      }
-    }
-  }
-
-  ── Claude Desktop (claude_desktop_config.json) ──────────────────
-  {
-    "mcpServers": {
-      "cortex": {
-        "command": "node",
-        "args": ["$MCP_ENTRY"],
-        "env": {
-          "MEMORY_JSON": "$MEMORY_JSON",
-          "VAULT_ROOT": "$VAULT_ROOT",
-          "DISTILL_SCRIPT": "$REPO_ROOT/distill.py",
-          "DISTILL_PYTHON": "$PYTHON"
-        }
-      }
-    }
-  }
-
-  Also add "$CORE_CONTEXT"
-  to your agent's always-loaded instructions.
-SNIPPET
+# --- 6. Done ------------------------------------------------------------------
+echo "==> [7/7] Done"
 echo
 echo "Distilled output is in: $DISTILLED_DIR"
+echo "MCP server deployed to: $MCP_HOME"
+echo "opencode.json updated:  $OPENCODE_JSON"
 echo
 echo "Optional — import your existing agent's config/memory into the vault:"
 echo "  $PYTHON $REPO_ROOT/cortex-import.py --vault \"$VAULT_ROOT\" --dry-run"
