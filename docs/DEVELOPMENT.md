@@ -47,9 +47,9 @@ Consequences:
 git clone https://github.com/JaySmith/Cortex-AI.git cortex-ai
 cd cortex-ai
 
-# 1. Python side (distiller)
+# 1. Python side (distiller). Add requirements-dev.txt to run the test suite.
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+.venv/bin/pip install -r requirements.txt -r requirements-dev.txt
 
 # 2. Node side (MCP server)
 cd mcp/cortex
@@ -138,6 +138,19 @@ idempotent and refuses to downgrade a live vault that's newer than the code.
 
 Override locations with `VAULT_ROOT`, `MCP_HOME`, `SKILLS_DIR` env vars;
 `--no-distill` skips the final re-distill.
+
+## Running the tests
+
+The pytest suite lives in `tests/` and needs `pytest` (declared in
+`requirements-dev.txt`, not the runtime `requirements.txt`):
+
+```bash
+.venv/bin/pip install -r requirements-dev.txt   # once
+.venv/bin/python -m pytest                       # run all
+```
+
+`conftest.py` copies `example-vault/` into a tmp dir per test, so tests never
+touch your real vault.
 
 ## Cutting a release
 

@@ -494,8 +494,9 @@ class TestScanVault:
         assert all(n.name != "secret" for n in notes)
 
     def test_skips_underscore_dirs(self, vault):
+        # example-vault already ships a _sync/ dir, so allow it to exist.
         udir = vault / "_sync" / "test.md"
-        udir.parent.mkdir(parents=True)
+        udir.parent.mkdir(parents=True, exist_ok=True)
         udir.write_text("---\nid: sync-note\ntype: knowledge\n---\nBody.")
         notes = scan_vault(vault)
         assert all(n.name != "sync-note" for n in notes)

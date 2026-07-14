@@ -4,7 +4,7 @@
 #
 # Installs Python deps, builds and deploys the MCP server, wires the distiller
 # to the bundled example vault, runs a first distill, installs the cortex-ai
-# skill, and upserts the opencode.json MCP entry.
+# skill, and upserts the opencode MCP entry (opencode.json or .jsonc).
 #
 # Usage:
 #   ./setup.sh                 # interactive: prompts for vault path + skills dir
@@ -223,8 +223,8 @@ PY
 "$PYTHON" "$REPO_ROOT/distill.py" --config "$CONFIG_FILE"
 echo
 
-# --- 5. Install the cortex-ai skill + upsert opencode.json -------------------
-echo "==> [6/7] Skill + opencode.json"
+# --- 5. Install the cortex-ai skill + upsert opencode config -----------------
+echo "==> [6/7] Skill + opencode config"
 SKILL_SRC="$REPO_ROOT/skills/cortex-ai/SKILL.md"
 if [ -f "$SKILL_SRC" ]; then
   SKILL_DEST_DIR="$OPENCODE_SKILLS_DIR/cortex-ai"
@@ -247,38 +247,15 @@ else
   echo "    WARNING: skill source not found at $SKILL_SRC — skipping"
 fi
 
-# Upsert cortex MCP entry in opencode.json
-OPENCODE_JSON="$HOME/.config/opencode/opencode.json"
-if [ -f "$OPENCODE_JSON" ]; then
-  MCP_ENTRY="$MCP_HOME/build/index.js"
-  python3 - "$OPENCODE_JSON" "$MCP_ENTRY" "$MEMORY_JSON" "$VAULT_ROOT" "$REPO_ROOT/distill.py" "$PYTHON" <<'PY'
-import json, sys
-from pathlib import Path
-opencode_json, mcp_entry, memory_json, vault_root, distill_script, distill_python = sys.argv[1:7]
-p = Path(opencode_json)
-cfg = json.loads(p.read_text())
-mcp = cfg.setdefault("mcp", {})
-mcp["cortex"] = {
-    "type": "local",
-    "command": ["node", mcp_entry],
-    "environment": {
-        "MEMORY_JSON": memory_json,
-        "VAULT_ROOT": vault_root,
-        "DISTILL_SCRIPT": distill_script,
-        "DISTILL_PYTHON": distill_python,
-    },
-    "enabled": True,
-}
-p.write_text(json.dumps(cfg, indent=2) + "\n")
-# Validate: opencode MCP config must use "environment", not "env"
-if "env" in mcp.get("cortex", {}):
-    print(f"    ERROR: cortex MCP entry uses deprecated 'env' key — must be 'environment'")
-    sys.exit(1)
-print(f"    upserted cortex MCP entry in {opencode_json}")
-PY
-else
-  echo "    WARNING: $OPENCODE_JSON not found — skipping MCP config"
-fi
+# Upsert cortex MCP entry into the active opencode config. The helper resolves
+# the right file ($OPENCODE_CONFIG > opencode.jsonc > opencode.json > create)
+# and does a comment-preserving surgical edit, so a .jsonc config is handled.
+python3 "$REPO_ROOT/cortex-mcp-upsert.py" \
+  --mcp-entry "$MCP_HOME/build/index.js" \
+  --memory-json "$MEMORY_JSON" \
+  --vault-root "$VAULT_ROOT" \
+  --distill-script "$REPO_ROOT/distill.py" \
+  --distill-python "$PYTHON"
 echo
 
 # --- Finalize install manifest -----------------------------------------------
@@ -321,7 +298,7 @@ echo "==> [7/7] Done"
 echo
 echo "Distilled output is in: $DISTILLED_DIR"
 echo "MCP server deployed to: $MCP_HOME"
-echo "opencode.json updated:  $OPENCODE_JSON"
+echo "opencode config:        cortex MCP entry upserted (see log above)"
 echo
 echo "Optional — import your existing agent's config/memory into the vault:"
 echo "  $PYTHON $REPO_ROOT/cortex-import.py --vault \"$VAULT_ROOT\" --dry-run"

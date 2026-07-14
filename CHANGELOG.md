@@ -92,6 +92,30 @@ python3 cortex-uninstall.py --vault <vault> --latest --apply  # revert
 
 ## [Unreleased]
 
+### Added
+- **`cortex-mcp-upsert.py` — jsonc-aware MCP config upsert.** `setup.sh` and
+  `deploy.sh` previously wrote the `cortex` MCP entry only to
+  `~/.config/opencode/opencode.json`, silently skipping users whose config lives
+  in `opencode.jsonc` (or at a custom `$OPENCODE_CONFIG` path). Both scripts now
+  call a shared helper that resolves the active config
+  (`$OPENCODE_CONFIG` > `opencode.jsonc` > `opencode.json` > create) and performs
+  a **comment-preserving surgical edit** of just the `mcp.cortex` block, so
+  `.jsonc` comments survive. The helper writes all four env vars
+  (`MEMORY_JSON`, `VAULT_ROOT`, `DISTILL_SCRIPT`, `DISTILL_PYTHON`) and is
+  idempotent. `deploy.sh` now also ships the helper into the live distiller dir.
+  Additive — no schema bump.
+- **Unit tests for the MCP upsert** (`tests/test_mcp_upsert.py`, 24 cases) covering
+  config resolution, comment-preserving edits, and empty-object handling.
+- **`requirements-dev.txt`** declaring `pytest` (previously undeclared — had to be
+  installed by hand to run the suite). See `docs/DEVELOPMENT.md` → Running the tests.
+
+### Fixed
+- **Trailing-comma bug in the MCP upsert** when inserting into an empty `{}` or
+  `"mcp": {}` object (would emit invalid `{...},}`). Caught by the new tests.
+- **`test_skips_underscore_dirs`** failed on a fresh checkout because
+  `example-vault/` now ships a `_sync/` dir; the test's `mkdir` now passes
+  `exist_ok=True`.
+
 ## [1.4.0] — 2026-07-13
 
 ### Added

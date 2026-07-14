@@ -115,7 +115,7 @@ echo
 # --- Deploy distiller --------------------------------------------------------
 echo "==> [2/6] Distiller -> $DISTILLER_HOME"
 for f in distill.py hive_client.py cortex-import.py cortex-uninstall.py gen-portfolio.py \
-         VERSION SCHEMA_VERSION CHANGELOG.md; do
+         cortex-mcp-upsert.py VERSION SCHEMA_VERSION CHANGELOG.md; do
   [ -f "$REPO_ROOT/$f" ] || continue
   run cp -p "$REPO_ROOT/$f" "$DISTILLER_HOME/$f"
 done
@@ -149,46 +149,29 @@ else
 fi
 echo
 
-# --- Upsert opencode.json ---------------------------------------------------
-echo "==> [5/6] opencode.json"
-OPENCODE_JSON="$HOME/.config/opencode/opencode.json"
+# --- Upsert opencode config -------------------------------------------------
+# The helper resolves the active config ($OPENCODE_CONFIG > opencode.jsonc >
+# opencode.json > create) and does a comment-preserving surgical edit.
+echo "==> [5/6] opencode config"
 MEMORY_JSON="$DISTILLER_HOME/distilled/memory.json"
 MCP_ENTRY="$MCP_HOME/build/index.js"
 PYTHON_UPSERT="$DISTILLER_HOME/.venv/bin/python"
 [ -x "$PYTHON_UPSERT" ] || PYTHON_UPSERT="$REPO_ROOT/.venv/bin/python"
 [ -x "$PYTHON_UPSERT" ] || PYTHON_UPSERT="python3"
+# Use the deployed helper if present (older installs may lack it), else repo copy.
+UPSERT_SCRIPT="$DISTILLER_HOME/cortex-mcp-upsert.py"
+[ -f "$UPSERT_SCRIPT" ] || UPSERT_SCRIPT="$REPO_ROOT/cortex-mcp-upsert.py"
+UPSERT_ARGS=(
+  --mcp-entry "$MCP_ENTRY"
+  --memory-json "$MEMORY_JSON"
+  --vault-root "$VAULT_ROOT"
+  --distill-script "$DISTILLER_HOME/distill.py"
+  --distill-python "$PYTHON_UPSERT"
+)
 if [ "$APPLY" = 1 ]; then
-  if [ -f "$OPENCODE_JSON" ]; then
-    "$PYTHON_UPSERT" - "$OPENCODE_JSON" "$MCP_ENTRY" "$MEMORY_JSON" "$VAULT_ROOT" "$REPO_ROOT/distill.py" "$PYTHON_UPSERT" <<'PY'
-import json, sys
-from pathlib import Path
-opencode_json, mcp_entry, memory_json, vault_root, distill_script, distill_python = sys.argv[1:7]
-p = Path(opencode_json)
-cfg = json.loads(p.read_text())
-mcp = cfg.setdefault("mcp", {})
-mcp["cortex"] = {
-    "type": "local",
-    "command": ["node", mcp_entry],
-    "environment": {
-        "MEMORY_JSON": memory_json,
-        "VAULT_ROOT": vault_root,
-        "DISTILL_SCRIPT": distill_script,
-        "DISTILL_PYTHON": distill_python,
-    },
-    "enabled": True,
-}
-p.write_text(json.dumps(cfg, indent=2) + "\n")
-# Validate: opencode MCP config must use "environment", not "env"
-if "env" in mcp.get("cortex", {}):
-    print(f"    ERROR: cortex MCP entry uses deprecated 'env' key — must be 'environment'")
-    sys.exit(1)
-print(f"    upserted cortex MCP entry in {opencode_json}")
-PY
-  else
-    echo "    WARNING: $OPENCODE_JSON not found — skipping"
-  fi
+  "$PYTHON_UPSERT" "$UPSERT_SCRIPT" "${UPSERT_ARGS[@]}"
 else
-  echo "    [DRY] upsert cortex MCP entry in $OPENCODE_JSON"
+  "$PYTHON_UPSERT" "$UPSERT_SCRIPT" "${UPSERT_ARGS[@]}" --dry-run
 fi
 echo
 
