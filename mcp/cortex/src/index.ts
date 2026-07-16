@@ -13,6 +13,7 @@ import {
   readFileRaw,
   writeNote,
   reloadVault,
+  buildThinkContext,
   type VaultNote,
 } from "./vault.js";
 import { HubClient } from "./hub-client.js";
@@ -192,6 +193,106 @@ server.registerTool(
     });
     return {
       content: [{ type: "text", text: lines.join("\n\n") }],
+    };
+  },
+);
+
+// ── memory_think ────────────────────────────────────────────────────
+server.registerTool(
+  "memory_think",
+  {
+    description:
+      "Synthesize a rich context for answering a question from the Cortex vault. " +
+      "Unlike memory_search (which returns summaries), this gathers full content from " +
+      "primary results, pulls in cross-referenced related notes, and identifies gaps " +
+      "in coverage. Returns a structured synthesis context designed to let you produce " +
+      "a single, well-sourced answer in one pass — no follow-up searches needed.",
+    inputSchema: {
+      query: z.string().describe("Natural language question to synthesize context for"),
+      limit: z
+        .number()
+        .optional()
+        .default(5)
+        .describe("Max primary notes to include (default 5; related notes added on top)"),
+    },
+  },
+  async ({ query, limit }) => {
+    const ctx = buildThinkContext(query, limit);
+
+    if (ctx.sourceNotes.length === 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `No memories found for "${query}". The vault has no coverage on this topic.`,
+          },
+        ],
+      };
+    }
+
+    const parts: string[] = [];
+
+    // Header
+    parts.push(`# Synthesis Context for: "${ctx.query}"`);
+    parts.push("");
+
+    // Primary sources (full content)
+    const primary = ctx.sourceNotes.filter((n) => n.relevance === "primary");
+    parts.push(`## Primary Sources (${primary.length})`);
+    parts.push("");
+    for (const note of primary) {
+      const alias =
+        note.aliases.length > 0 ? ` (aka ${note.aliases.join(", ")})` : "";
+      const tags = note.tags.length > 0 ? ` [${note.tags.join(", ")}]` : "";
+      parts.push(`### ${note.id}${alias} — ${note.type}/${note.category}${tags}`);
+      parts.push("");
+      parts.push(note.content);
+      parts.push("");
+    }
+
+    // Related context (truncated)
+    const related = ctx.sourceNotes.filter((n) => n.relevance === "related");
+    if (related.length > 0) {
+      parts.push(`## Related Context (${related.length})`);
+      parts.push("");
+      for (const note of related) {
+        const tags = note.tags.length > 0 ? ` [${note.tags.join(", ")}]` : "";
+        parts.push(`- **${note.id}** (${note.type}/${note.category})${tags}`);
+        parts.push(`  ${note.content.slice(0, 300).replace(/\n/g, " ").trim()}…`);
+        parts.push("");
+      }
+    }
+
+    // Cross-references
+    if (ctx.crossReferences.length > 0) {
+      parts.push("## Cross-References");
+      parts.push("");
+      for (const ref of ctx.crossReferences) {
+        parts.push(
+          `- ${ref.from} ↔ ${ref.to} (shared: ${ref.sharedTags.join(", ")})`,
+        );
+      }
+      parts.push("");
+    }
+
+    // Gap analysis
+    if (ctx.gaps.length > 0) {
+      parts.push("## Gaps in Coverage");
+      parts.push("");
+      for (const gap of ctx.gaps) {
+        parts.push(`- ${gap}`);
+      }
+      parts.push("");
+    }
+
+    parts.push(
+      "---\nUse the above context to synthesize a direct, well-cited answer. " +
+        "Cite note ids (e.g. [[note-id]]) when referencing specific sources. " +
+        "If gaps exist, explicitly note what the vault doesn't know.",
+    );
+
+    return {
+      content: [{ type: "text", text: parts.join("\n") }],
     };
   },
 );

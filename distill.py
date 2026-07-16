@@ -316,6 +316,16 @@ def strip_wiki_links(text: str) -> str:
     return text
 
 
+def extract_wiki_links(text: str) -> list[str]:
+    """Extract target ids from [[wiki-link]] syntax in a note body.
+
+    Handles both [[target]] and [[target|display text]] forms.
+    Returns the raw target strings (which may be ids or display names).
+    """
+    links = re.findall(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]", text)
+    return links
+
+
 def strip_leading_h1(text: str) -> str:
     """Drop a note body's own leading `# Title`.
 
@@ -375,12 +385,23 @@ class VaultNote:
         self.aliases: list[str] = self._as_list(meta.get("aliases"))
         self.updated: str = self._as_str(meta.get("updated"))
         self.drained: bool = meta.get("drained") is True  # log/session lessons extracted -> safe to purge
+        self.expires_at: str = self._as_str(meta.get("expires_at"))  # ISO date; empty = never
         self.hive: bool | None = None  # None = use tier default, True = force sync, False = never sync
         raw_hive = meta.get("hive")
         if raw_hive is True:
             self.hive = True
         elif raw_hive is False:
             self.hive = False
+
+    def is_expired(self) -> bool:
+        """Return True if this note has a past expires_at date."""
+        if not self.expires_at:
+            return False
+        try:
+            exp = datetime.strptime(self.expires_at, "%Y-%m-%d")
+            return datetime.now() > exp
+        except ValueError:
+            return False
 
     def title(self) -> str:
         if self.aliases:
@@ -403,7 +424,7 @@ class VaultNote:
         return body
 
     def to_dict(self) -> dict:
-        return {
+        d = {
             "id": self.name,
             "type": self.note_type,
             "category": self.category,
@@ -413,6 +434,9 @@ class VaultNote:
             "aliases": self.aliases,
             "content": strip_wiki_links(self.body),
         }
+        if self.expires_at:
+            d["expires_at"] = self.expires_at
+        return d
 
 
 def scan_vault(vault_path: Path, skip_dirs: set[str] | None = None) -> list[VaultNote]:
@@ -456,6 +480,103 @@ def excluded(note: VaultNote, exclude_tags: set[str], vault_only_types: set[str]
     if note.note_type in vault_only_types:
         return True
     return bool(set(note.tags) & exclude_tags)
+
+
+# ---------------------------------------------------------------------------
+# Graph extraction — parse [[wiki-links]] into a directed edge list
+# ---------------------------------------------------------------------------
+
+def build_wiki_graph(notes: list[VaultNote]) -> dict:
+    """Parse [[wiki-links]] from all note bodies into a directed graph.
+
+    Returns a dict with:
+      - nodes: [{id, type, category, degree}]
+      - edges: [{source, target}]
+      - dangling: [{note, target}]  (links pointing to non-existent notes)
+      - isolated: [note_id]  (notes with zero inbound or outbound links)
+      - god_nodes: [{id, degree}]  (notes with degree > median + 2*stdev)
+    """
+    # Build a lookup from note id -> note for resolving links
+    id_set = {n.name for n in notes}
+    id_aliases: dict[str, str] = {}  # alias -> canonical id
+    for n in notes:
+        for alias in n.aliases:
+            id_aliases[alias.lower()] = n.name
+
+    edges: list[dict] = []
+    dangling: list[dict] = []
+    out_degree: dict[str, int] = {n.name: 0 for n in notes}
+    in_degree: dict[str, int] = {n.name: 0 for n in notes}
+
+    for n in notes:
+        raw_links = extract_wiki_links(n.body)
+        seen_targets: set[str] = set()
+        for target in raw_links:
+            # Resolve: direct id match, alias match, or case-insensitive id match
+            resolved = target
+            if target not in id_set:
+                resolved = id_aliases.get(target.lower(), "")
+            if not resolved:
+                # Try case-insensitive id match
+                lower_target = target.lower()
+                for nid in id_set:
+                    if nid.lower() == lower_target:
+                        resolved = nid
+                        break
+            if not resolved:
+                dangling.append({"note": n.name, "target": target})
+                continue
+            if resolved == n.name:
+                continue  # skip self-links
+            if resolved in seen_targets:
+                continue  # dedupe per-note
+            seen_targets.add(resolved)
+            edges.append({"source": n.name, "target": resolved})
+            out_degree[n.name] = out_degree.get(n.name, 0) + 1
+            in_degree[resolved] = in_degree.get(resolved, 0) + 1
+
+    # Compute total degree for each node
+    total_degree = {}
+    for nid in id_set:
+        total_degree[nid] = out_degree.get(nid, 0) + in_degree.get(nid, 0)
+
+    # Isolated nodes (degree == 0)
+    isolated = sorted(nid for nid, d in total_degree.items() if d == 0)
+
+    # God nodes: degree > median + 2*stdev
+    degrees = sorted(total_degree.values())
+    if degrees:
+        median = degrees[len(degrees) // 2]
+        mean = sum(degrees) / len(degrees)
+        variance = sum((d - mean) ** 2 for d in degrees) / len(degrees)
+        stdev = variance ** 0.5
+        threshold = median + 2 * stdev
+    else:
+        threshold = 0
+    god_nodes = sorted(
+        [{"id": nid, "degree": d} for nid, d in total_degree.items() if d > threshold],
+        key=lambda x: x["degree"],
+        reverse=True,
+    )
+
+    # Nodes with metadata
+    nodes = [
+        {
+            "id": n.name,
+            "type": n.note_type,
+            "category": n.category,
+            "degree": total_degree.get(n.name, 0),
+        }
+        for n in notes
+    ]
+
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "dangling": dangling,
+        "isolated": isolated,
+        "god_nodes": god_nodes,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -625,6 +746,13 @@ def sync_python_agents(
         if n.note_type in inc and not excluded(n, all_exclude, vault_only_set)
     ]
     print(f"\n--- python-agents (json): {len(matching)} notes ---")
+    # Build wiki-link graph for inclusion in memory.json
+    graph = build_wiki_graph(notes)
+    # Build adjacency lookup for graph-enhanced relatedness
+    adjacency: dict[str, list[str]] = {}
+    for edge in graph["edges"]:
+        adjacency.setdefault(edge["source"], []).append(edge["target"])
+        adjacency.setdefault(edge["target"], []).append(edge["source"])
     result = {
         "_meta": {
             "generated": datetime.now().isoformat(),
@@ -632,8 +760,15 @@ def sync_python_agents(
             "cortex_version": cortex_version(),
             "schema_version": schema_version(),
             "count": len(matching),
+            "graph_edges": len(graph["edges"]),
+            "graph_dangling": len(graph["dangling"]),
+            "graph_isolated": len(graph["isolated"]),
         },
         "notes": {n.name: n.to_dict() for n in sorted(matching, key=lambda n: n.name)},
+        "_graph": {
+            "edges": graph["edges"],
+            "adjacency": adjacency,
+        },
     }
     write_file(out, json.dumps(result, indent=2, ensure_ascii=False), dry)
 
@@ -1056,6 +1191,11 @@ def main() -> None:
         action="store_true",
         help="Delete drained log/session notes and rebuild distilled outputs",
     )
+    ap.add_argument(
+        "--graph",
+        action="store_true",
+        help="Output wiki-link graph to distilled/graph.json and print summary, then exit",
+    )
     args = ap.parse_args()
 
     cfg_path = Path(args.config)
@@ -1106,9 +1246,49 @@ def main() -> None:
     notes = scan_vault(vault, skip_dirs)
     print(f"Scanned vault: {len(notes)} notes with metadata")
 
+    # Filter out expired notes (past expires_at date) from distillation targets.
+    # Expired notes stay in the vault on disk but are excluded from core-context,
+    # memory.json, and skill embeds. They still appear in the graph since they
+    # exist physically.
+    expired = [n for n in notes if n.is_expired()]
+    if expired:
+        print(f"  Skipping {len(expired)} expired note(s): {', '.join(n.name for n in expired)}")
+    active_notes = [n for n in notes if not n.is_expired()]
+
     if args.list:
         for n in sorted(notes, key=lambda x: (x.tier, x.name)):
             print(f"  [{n.tier or 'untagged':20}] {n.name:36} type={n.note_type}")
+        return
+
+    if args.graph:
+        graph = build_wiki_graph(notes)
+        # Write to distilled/graph.json
+        graph_out = vault / "_sync" / "distilled" / "graph.json"
+        graph_data = {
+            "_meta": {
+                "generated": datetime.now().isoformat(),
+                "source": "Cortex vault wiki-links",
+                "cortex_version": cortex_version(),
+                "node_count": len(graph["nodes"]),
+                "edge_count": len(graph["edges"]),
+                "dangling_count": len(graph["dangling"]),
+                "isolated_count": len(graph["isolated"]),
+                "god_node_count": len(graph["god_nodes"]),
+            },
+            **graph,
+        }
+        graph_out.parent.mkdir(parents=True, exist_ok=True)
+        graph_out.write_text(json.dumps(graph_data, indent=2, ensure_ascii=False), encoding="utf-8")
+        print(f"Wrote graph: {graph_out}")
+        print(f"  Nodes: {len(graph['nodes'])}")
+        print(f"  Edges: {len(graph['edges'])}")
+        print(f"  Dangling links: {len(graph['dangling'])}")
+        print(f"  Isolated nodes: {len(graph['isolated'])}")
+        if graph["isolated"]:
+            print(f"    {', '.join(graph['isolated'][:10])}")
+        print(f"  God nodes (degree > threshold): {len(graph['god_nodes'])}")
+        for g in graph["god_nodes"][:5]:
+            print(f"    {g['id']}: degree {g['degree']}")
         return
 
     eager_tiers: list[str] = cfg.get("eager_tiers", ["core"])
@@ -1122,19 +1302,19 @@ def main() -> None:
     core_out: Path | None = None
     cc = targets.get("core_context", {})
     if cc.get("enabled"):
-        core_out = sync_core_context(notes, cc, eager_tiers, strip_links, dry)
+        core_out = sync_core_context(active_notes, cc, eager_tiers, strip_links, dry)
 
     sk = targets.get("skills", {})
     if sk.get("enabled"):
-        sync_skill_embeds(notes, sk, strip_links, dry)
+        sync_skill_embeds(active_notes, sk, strip_links, dry)
 
     pr = targets.get("projects", {})
     if pr.get("enabled"):
-        sync_projects(notes, pr, strip_links, dry)
+        sync_projects(active_notes, pr, strip_links, dry)
 
     pa = targets.get("python-agents", {})
     if pa.get("enabled"):
-        sync_python_agents(notes, pa, exclude_tags, vault_only_types, dry)
+        sync_python_agents(active_notes, pa, exclude_tags, vault_only_types, dry)
 
     if core_out:
         # prune_legacy is opt-in — off by default to prevent accidental deletions

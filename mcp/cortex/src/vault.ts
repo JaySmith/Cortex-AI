@@ -17,6 +17,7 @@ export interface VaultNote {
   updated: string;
   aliases: string[];
   content: string;
+  expires_at?: string;
 }
 
 export interface VaultIndex {
@@ -24,6 +25,10 @@ export interface VaultIndex {
   source: string;
   count: number;
   notes: Record<string, VaultNote>;
+  graph?: {
+    edges: Array<{ source: string; target: string }>;
+    adjacency: Record<string, string[]>;
+  };
 }
 
 let _index: VaultIndex | null = null;
@@ -41,6 +46,7 @@ function loadIndex(): void {
     source: data._meta.source,
     count: data._meta.count,
     notes: data.notes,
+    graph: data._graph || undefined,
   };
   try {
     _loadedMtimeMs = statSync(_memoryJsonPath).mtimeMs;
@@ -88,8 +94,19 @@ export function getAllNotes(): VaultNote[] {
   return Object.values(getIndex().notes);
 }
 
+/** Check if a note has expired based on its expires_at field. */
+function isExpired(note: VaultNote): boolean {
+  if (!note.expires_at) return false;
+  try {
+    const exp = new Date(note.expires_at);
+    return new Date() > exp;
+  } catch {
+    return false;
+  }
+}
+
 export function searchNotes(query: string, limit: number): VaultNote[] {
-  const notes = getAllNotes();
+  const notes = getAllNotes().filter((n) => !isExpired(n));
   const terms = query
     .toLowerCase()
     .split(/\s+/)
@@ -131,11 +148,18 @@ export function getRelated(id: string, limit: number): VaultNote[] {
   const note = getNote(id);
   if (!note) return [];
 
-  const notes = getAllNotes();
+  const index = getIndex();
+  const notes = getAllNotes().filter((n) => !isExpired(n));
+
+  // Graph-enhanced relatedness: notes linked via wiki-links get a strong boost
+  const graphNeighbors = new Set(index.graph?.adjacency?.[id] || []);
+
   const scored = notes
     .filter((n) => n.id !== id)
     .map((n) => {
       let score = 0;
+      // Graph edge: direct wiki-link connection (strongest signal)
+      if (graphNeighbors.has(n.id)) score += 20;
       const tagOverlap = n.tags.filter((t) => note.tags.includes(t)).length;
       score += tagOverlap * 4;
       if (n.category === note.category) score += 3;
@@ -146,6 +170,117 @@ export function getRelated(id: string, limit: number): VaultNote[] {
     .sort((a, b) => b.score - a.score);
 
   return scored.slice(0, limit).map((s) => s.note);
+}
+
+/**
+ * Synthesize context for a query: broad search + full content + cross-refs + gaps.
+ * Returns a structured object the caller can render into a synthesis prompt.
+ */
+export interface ThinkContext {
+  query: string;
+  sourceNotes: Array<{
+    id: string;
+    type: string;
+    category: string;
+    aliases: string[];
+    tags: string[];
+    content: string;
+    relevance: "primary" | "related";
+  }>;
+  crossReferences: Array<{ from: string; to: string; sharedTags: string[] }>;
+  gaps: string[];
+}
+
+export function buildThinkContext(query: string, limit: number): ThinkContext {
+  // Phase 1: broad search (2x the requested limit for richer context)
+  const searchLimit = Math.max(limit * 2, 10);
+  const primary = searchNotes(query, searchLimit);
+
+  // Phase 2: fetch full content for top results
+  const sourceNotes: ThinkContext["sourceNotes"] = primary.map((note) => ({
+    id: note.id,
+    type: note.type,
+    category: note.category,
+    aliases: note.aliases,
+    tags: note.tags,
+    content: note.content,
+    relevance: "primary" as const,
+  }));
+
+  // Phase 3: find cross-references between the primary results
+  const crossReferences: ThinkContext["crossReferences"] = [];
+  for (let i = 0; i < primary.length; i++) {
+    for (let j = i + 1; j < primary.length; j++) {
+      const shared = primary[i].tags.filter((t) => primary[j].tags.includes(t));
+      if (shared.length > 0) {
+        crossReferences.push({
+          from: primary[i].id,
+          to: primary[j].id,
+          sharedTags: shared,
+        });
+      }
+    }
+  }
+
+  // Phase 4: pull in related notes not already in primary results
+  const primaryIds = new Set(primary.map((n) => n.id));
+  const relatedIds = new Set<string>();
+  for (const note of primary.slice(0, 3)) {
+    const related = getRelated(note.id, 3);
+    for (const r of related) {
+      if (!primaryIds.has(r.id) && !relatedIds.has(r.id)) {
+        relatedIds.add(r.id);
+        sourceNotes.push({
+          id: r.id,
+          type: r.type,
+          category: r.category,
+          aliases: r.aliases,
+          tags: r.tags,
+          content: r.content.slice(0, 500),
+          relevance: "related",
+        });
+      }
+    }
+  }
+
+  // Phase 5: gap analysis — what the vault doesn't know
+  const gaps: string[] = [];
+  const allTags = new Set(sourceNotes.flatMap((n) => n.tags));
+  const allCategories = new Set(sourceNotes.map((n) => n.category));
+  const allTypes = new Set(sourceNotes.map((n) => n.type));
+
+  if (sourceNotes.length === 0) {
+    gaps.push("No notes found matching this query — the vault has no coverage on this topic.");
+  } else if (sourceNotes.length <= 2) {
+    gaps.push(
+      `Only ${sourceNotes.length} note(s) found — coverage may be thin. Consider capturing more context on this topic.`,
+    );
+  }
+
+  // Detect if results are all the same type/category (narrow coverage)
+  if (allTypes.size === 1 && sourceNotes.length > 2) {
+    gaps.push(
+      `All results are type "${[...allTypes][0]}" — no cross-type perspective found (e.g. decisions, risks, or entities that relate).`,
+    );
+  }
+
+  // Check for stale notes (updated > 90 days ago)
+  const now = new Date();
+  const staleThreshold = 90 * 24 * 60 * 60 * 1000;
+  const staleNotes = sourceNotes.filter((n) => {
+    // Find the original note to get the updated field
+    const orig = getNote(n.id);
+    if (!orig || !orig.updated) return false;
+    const updated = new Date(orig.updated);
+    return now.getTime() - updated.getTime() > staleThreshold;
+  });
+  if (staleNotes.length > 0) {
+    gaps.push(
+      `${staleNotes.length} note(s) haven't been updated in 90+ days: ${staleNotes.map((n) => n.id).join(", ")}. Information may be outdated.`,
+    );
+  }
+
+  return { query, sourceNotes, crossReferences, gaps };
 }
 
 export function findVaultFile(id: string): string | null {
