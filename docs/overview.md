@@ -1,6 +1,6 @@
 # Cortex — What It Is and How It Works
 
-> Applies to Cortex 1.4.0 (schema 2). See [CHANGELOG.md](../CHANGELOG.md) for release history.
+> Applies to Cortex 2.0.0 (schema 2). See [CHANGELOG.md](../CHANGELOG.md) for release history.
 
 ## The Problem It Solves
 
@@ -73,18 +73,17 @@ The always-on layer also includes a lightweight *index* — a table of
 contents telling the assistant what else exists, so it knows what it *could*
 pull in without actually loading any of it.
 
-### 4. The Runtime Query Layer — search on demand
+### 4. The CLI Memory Commands — search on demand
 
-The agent exposes search tools mid-conversation:
+The `cortex` CLI provides these commands mid-conversation:
 
-| Tool | What it does |
-|------|-------------|
-| **Search** | Keyword lookup across all notes |
-| **Get** | Fetch one note in full by its stable name |
-| **Related** | Find notes connected to a given one by shared tags and category |
-| **Write** | Create or update a note from inside a conversation, then re-encode |
+| Command | What it does |
+|---------|-------------|
+| `cortex memory search <q>` | Keyword lookup across all notes |
+| `cortex memory get <id>`  | Fetch one note in full by its stable name |
+| `cortex memory write`     | Create or update a note from inside a conversation, then auto-encode |
 
-The write tool closes the loop: the assistant can capture what it learns
+The write command closes the loop: the assistant can capture what it learns
 mid-session without you leaving the conversation.
 
 ---

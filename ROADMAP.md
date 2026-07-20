@@ -32,7 +32,7 @@ uses existing `hub_memory_*` API. No changes to cortex-hub.
 - Phase 2: Python hub client (`cortex/hub/client.py`) ✅
 - Phase 3: CLI commands (`--hive-push/pull/status`) ✅
 - Phase 4: Hive frontmatter (`VaultNote.hive`) ✅
-- Phase 5: MCP server hive proxy (`hub-client.ts`) ✅
+- ~~Phase 5: MCP server hive proxy (`hub-client.ts`)~~ (removed in v2.0.0)
 - Phase 6: Skill commands (`cortex hive status/push/pull/setup`) ✅
 - Phase 7: Bearer token auth (cortex-hub side) ⏳
 

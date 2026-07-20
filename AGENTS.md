@@ -31,12 +31,11 @@ If it's ambiguous whether a request is about the repo or the live install, assum
 
 - `skills/` — canonical skill templates (source of truth for skills)
 - `cortex/` — Python package (CLI, encoder, config, platforms, templates)
-- `mcp/cortex/` — MCP server (TypeScript, built to `build/`)
+- `cortex/` — Python package (CLI, encoder, config, platforms, templates)
 - `tests/` — pytest suite (`conftest.py` copies `example-vault` into tmp)
 - `docs/` — conventions and schema references
 
 ## Commands
 
 - **Test:** `pytest`
-- **Build MCP:** `cd mcp/cortex && npm run build`
 - **Encode:** `cortex encode --config <vault>/_sync/cortex.yaml`

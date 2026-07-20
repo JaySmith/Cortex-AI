@@ -80,8 +80,9 @@ No database, no cloud service, no background daemon. Files in, files out.
 The everyday workflow is **capture first, rebuild second**:
 
 1. **Capture** — the agent writes notes into the vault during conversation
-   (preferences, decisions, patterns, session summaries). Individual writes
-   trigger an automatic rebuild in the background.
+   (preferences, decisions, patterns, session summaries) using
+   `cortex memory write`. Individual writes trigger an automatic rebuild in
+   the background (unless `--no-encode` is passed).
 2. **Rebuild** — `cortex encode` regenerates all encoded outputs from the
    current vault state. This is the explicit step you run after a batch of
    manual edits.

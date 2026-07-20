@@ -9,8 +9,9 @@ All user-facing operations consolidated behind a single CLI:
   cortex uninstall       Revert Cortex-installed assets
   cortex encode          Run vault-to-agent encoding
   cortex status          Show basic health of Cortex
-  cortex memory search   Search encoded memory
-  cortex memory write    Write a memory note (metadata-only in Phase 1)
+   cortex memory search   Search encoded memory
+   cortex memory get      Fetch a single note by id
+   cortex memory write    Write a memory note to the vault
   cortex import          Import existing agent context
   cortex version         Print version information
 """
@@ -760,8 +761,140 @@ def init(
 
 
 # ---------------------------------------------------------------------------
+# memory helpers
+# ---------------------------------------------------------------------------
+
+
+def _find_memory_json(vault: str | None) -> Path | None:
+    """Locate memory.json from --vault option or common locations."""
+    if vault:
+        vp = Path(vault).expanduser()
+        mp = vp / "_sync" / "encoded" / "memory.json"
+        if mp.exists():
+            return mp
+        return mp  # return path even if missing — caller handles
+    for p in [Path.cwd(), Path.home() / "Cortex"]:
+        mp = p / "_sync" / "encoded" / "memory.json"
+        if mp.exists():
+            return mp
+    return None
+
+
+def _find_vault_path(vault: str | None) -> Path | None:
+    """Locate vault root from --vault option or common locations."""
+    if vault:
+        return Path(vault).expanduser()
+    for p in [Path.cwd(), Path.home() / "Cortex"]:
+        if (p / "_sync" / "cortex.yaml").exists():
+            return p
+    return None
+
+
+def _scan_vault_for_note(vault_root: Path, note_id: str) -> Path | None:
+    """Walk the vault looking for <note_id>.md in any subdirectory."""
+    for md_file in vault_root.rglob(f"{note_id}.md"):
+        # skip dot-dirs and _sync
+        parts = md_file.relative_to(vault_root).parts
+        if any(p.startswith((".", "_")) for p in parts):
+            continue
+        return md_file
+    return None
+
+
+def _print_note(note_id: str, note: dict) -> None:
+    """Pretty-print a note dict from memory.json."""
+    typer.echo(f"# {note_id}")
+    typer.echo(f"**Type:** {note.get('type', '?')}")
+    typer.echo(f"**Category:** {note.get('category', '')}")
+    typer.echo(f"**Tier:** {note.get('tier', '')}")
+    updated = note.get("updated", "")
+    if updated:
+        typer.echo(f"**Updated:** {updated}")
+    aliases = note.get("aliases", [])
+    if aliases:
+        typer.echo(f"**Aliases:** {', '.join(aliases)}")
+    tags = note.get("tags", [])
+    if tags:
+        typer.echo(f"**Tags:** {', '.join(tags)}")
+    body = note.get("content", "")
+    if body:
+        typer.echo("")
+        typer.echo(body)
+
+
+def _print_note_from_vault_file(vault_root: Path, note_id: str) -> None:
+    """Find and print a note by scanning vault files."""
+    file_path = _scan_vault_for_note(vault_root, note_id)
+    if file_path is None:
+        _error(
+            f"Note '{note_id}' not found in vault",
+            f"No file named {note_id}.md found in {vault_root}",
+            "Check the id for typos, or run 'cortex encode' first.",
+        )
+        raise typer.Exit(code=1)
+
+    content = file_path.read_text(encoding="utf-8")
+    typer.echo(f"# {note_id} (from vault file)")
+    typer.echo(f"**Path:** {file_path}")
+    typer.echo("")
+    typer.echo(content)
+
+
+# ---------------------------------------------------------------------------
 # memory subcommands
 # ---------------------------------------------------------------------------
+
+
+@memory_app.command()
+def get(
+    note_id: str = typer.Argument(..., help="Note id slug (e.g. 'askdel', 'jira-rest-api')"),
+    vault: str | None = typer.Option(None, "--vault", help="Vault path (auto-detect by default)"),
+) -> None:
+    """Fetch a single memory note by its id from memory.json or vault files."""
+    # Find memory.json
+    mem_path = _find_memory_json(vault)
+
+    if not mem_path or not mem_path.exists():
+        # Fall back to vault file scan
+        vault_path = _find_vault_path(vault)
+        if vault_path is not None:
+            _print_note_from_vault_file(vault_path, note_id)
+            return
+        _error(
+            "memory.json not found and no vault path available",
+            "A memory index or vault directory is needed to retrieve a note.",
+            "Run 'cortex encode' to generate memory.json, or specify --vault.",
+        )
+        raise typer.Exit(code=1)
+
+    try:
+        data = json.loads(mem_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        _error(
+            f"Could not read memory.json: {e}",
+            "The memory index file exists but is unreadable or contains invalid JSON.",
+            "Run 'cortex encode' to regenerate memory.json.",
+        )
+        raise typer.Exit(code=1) from e
+
+    notes = data.get("notes", {})
+    note = notes.get(note_id)
+    if note is not None:
+        _print_note(note_id, note)
+        return
+
+    # Not in memory.json — try vault file fallback
+    vault_path = _find_vault_path(vault)
+    if vault_path is not None:
+        _print_note_from_vault_file(vault_path, note_id)
+        return
+
+    _error(
+        f"Note '{note_id}' not found",
+        "The note was not found in memory.json or the vault directory.",
+        "Check the id for typos. Use 'cortex memory search' to find available notes.",
+    )
+    raise typer.Exit(code=1)
 
 
 @memory_app.command()
@@ -770,17 +903,7 @@ def search(
     vault: str | None = typer.Option(None, "--vault", help="Vault path (auto-detect by default)"),
 ) -> None:
     """Search encoded memory from the CLI."""
-    # Find memory.json
-    mem_path = None
-    if vault:
-        vp = Path(vault).expanduser()
-        mem_path = vp / "_sync" / "encoded" / "memory.json"
-    else:
-        for p in [Path.cwd(), Path.home() / "Cortex"]:
-            mp = p / "_sync" / "encoded" / "memory.json"
-            if mp.exists():
-                mem_path = mp
-                break
+    mem_path = _find_memory_json(vault)
 
     if not mem_path or not mem_path.exists():
         _error(
@@ -849,20 +972,28 @@ def write(
     category: str | None = typer.Option(
         None, "--category", help="Category (patterns, api, projects, etc.)"
     ),
+    body: str | None = typer.Option(None, "--body", help="Note body content (inline text)"),
+    body_file: str | None = typer.Option(
+        None, "--body-file", help="Path to file containing note body content"
+    ),
+    update: bool = typer.Option(
+        False, "--update", help="Update an existing note (patch body + bump date)"
+    ),
+    no_encode: bool = typer.Option(False, "--no-encode", help="Skip automatic encode after write"),
     vault: str | None = typer.Option(None, "--vault", help="Vault path (auto-detect by default)"),
 ) -> None:
-    """Write a metadata-only memory note to the vault."""
-    # Find vault
-    vault_path = None
-    if vault:
-        vault_path = Path(vault).expanduser()
-    else:
-        for p in [Path.cwd(), Path.home() / "Cortex"]:
-            cfg = p / "_sync" / "cortex.yaml"
-            if cfg.exists():
-                vault_path = p
-                break
+    """Write a memory note to the vault. Without --body/--body-file, writes frontmatter only."""
+    # Validate mutually exclusive body options
+    if body and body_file:
+        _error(
+            "Conflicting body options",
+            "Both --body and --body-file were provided.",
+            "Use one or the other, not both.",
+        )
+        raise typer.Exit(code=1)
 
+    # Find vault
+    vault_path = _find_vault_path(vault)
     if not vault_path or not vault_path.exists():
         _error(
             "Vault not found",
@@ -885,14 +1016,86 @@ def write(
     target_dir.mkdir(parents=True, exist_ok=True)
 
     note_path = target_dir / f"{note_id}.md"
-    if note_path.exists():
-        _error(
-            f"Note already exists at {note_path}",
-            "Overwriting an existing note would lose its current content.",
-            "Use a different --title, or manually delete the existing note first.",
-        )
-        raise typer.Exit(code=1)
 
+    if note_path.exists():
+        if not update:
+            _error(
+                f"Note already exists at {note_path}",
+                "Overwriting an existing note would lose its current content.",
+                "Use --update to patch the existing note, or use a different --title.",
+            )
+            raise typer.Exit(code=1)
+        # Update mode: patch body and bump date
+        existing = note_path.read_text(encoding="utf-8")
+        frontmatter, _ = _split_frontmatter(existing)
+        body_text = _read_body(body, body_file)
+        new_content = _build_note_content(
+            note_id, note_type, tier, title, today, category, tag_list, body_text
+        )
+        note_path.write_text(new_content, encoding="utf-8")
+        typer.echo(f"Updated note: {note_path}")
+    else:
+        if update:
+            _error(
+                f"Note does not exist at {note_path}",
+                "--update was passed but no existing note was found.",
+                "Remove --update to create a new note, or check the --title value.",
+            )
+            raise typer.Exit(code=1)
+        body_text = _read_body(body, body_file)
+        content = _build_note_content(
+            note_id, note_type, tier, title, today, category, tag_list, body_text
+        )
+        note_path.write_text(content, encoding="utf-8")
+        typer.echo(f"Created note: {note_path}")
+
+    typer.echo(f"  id: {note_id}")
+    typer.echo(f"  type: {note_type}  tier: {tier}")
+    if tag_list:
+        typer.echo(f"  tags: {tag_list}")
+    if body is not None or body_file is not None:
+        typer.echo("  body: included")
+
+    if not no_encode:
+        _fire_encode(vault_path)
+
+
+def _read_body(body: str | None, body_file: str | None) -> str:
+    """Read body content from inline text or file."""
+    if body is not None:
+        return body
+    if body_file is not None:
+        bf = Path(body_file).expanduser()
+        if not bf.exists():
+            _error(
+                f"Body file not found: {bf}",
+                "The --body-file path does not exist.",
+                "Check the path and try again.",
+            )
+            raise typer.Exit(code=1)
+        return bf.read_text(encoding="utf-8")
+    return ""
+
+
+def _split_frontmatter(content: str) -> tuple[str, str]:
+    """Split markdown content into frontmatter and body."""
+    parts = content.split("---", 2)
+    if len(parts) >= 3:
+        return parts[0] + "---" + parts[1] + "---\n", parts[2]
+    return "", content
+
+
+def _build_note_content(
+    note_id: str,
+    note_type: str,
+    tier: str,
+    title: str,
+    today: str,
+    category: str | None,
+    tag_list: list[str],
+    body_text: str,
+) -> str:
+    """Build markdown content with YAML frontmatter and optional body."""
     parts = [
         "---",
         f"id: {note_id}",
@@ -907,16 +1110,44 @@ def write(
         parts.append(f"tags: [{', '.join(tag_list)}]")
     parts.append("---")
     parts.append("")
-    parts.append("")
+    if body_text:
+        parts.append(body_text)
+        if not body_text.endswith("\n"):
+            parts.append("")
+    return "\n".join(parts)
 
-    content = "\n".join(parts)
-    note_path.write_text(content, encoding="utf-8")
-    typer.echo(f"Created note: {note_path}")
-    typer.echo(f"  id: {note_id}")
-    typer.echo(f"  type: {note_type}  tier: {tier}")
-    if tag_list:
-        typer.echo(f"  tags: {tag_list}")
-    typer.echo("\nRun 'cortex encode' to rebuild encoded output.")
+
+def _resolve_encode_python(vault_root: Path) -> str:
+    """Find the Python interpreter for the encoder venv (cross-platform)."""
+    # 1. ENCODE_PYTHON env var override
+    if env_python := os.environ.get("ENCODE_PYTHON"):
+        return env_python
+    # 2. Cross-platform venv detection
+    for candidate in [
+        vault_root / "_sync" / ".venv" / "bin" / "python",
+        vault_root / "_sync" / ".venv" / "Scripts" / "python.exe",
+    ]:
+        if candidate.exists():
+            return str(candidate)
+    # 3. Fallback
+    for fallback in ["python3", "python"]:
+        if shutil.which(fallback):
+            return fallback
+    return "python3"
+
+
+def _fire_encode(vault_root: Path) -> None:
+    """Fire-and-forget encode after a write, so memory.json stays current."""
+    python = _resolve_encode_python(vault_root)
+    try:
+        subprocess.Popen(
+            [python, "-m", "cortex.encoder.core"],
+            cwd=str(vault_root),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        pass  # encode is best-effort
 
 
 # ---------------------------------------------------------------------------

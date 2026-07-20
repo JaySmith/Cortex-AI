@@ -24,16 +24,11 @@ That's it. You have working encoded output in `~/Cortex/_sync/encoded/`.
 Write a note from the CLI:
 
 ```bash
-cortex memory write --title "My Preferences" --type feedback --tier core
+cortex memory write --title "My Preferences" --type feedback --tier core --body "I prefer TypeScript strict mode"
 ```
 
-Then rebuild:
-
-```bash
-cortex encode
-```
-
-The note is now part of your agent's always-on context.
+The note is now part of your agent's always-on context (encoding auto-triggers
+in the background).
 
 ## First Search
 

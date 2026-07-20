@@ -104,13 +104,14 @@ migrate and re-encode.
 The vault has no `_meta` in `memory.json`. Run `cortex encode` to generate
 it.
 
-## Platform Integration
+## CLI Memory Commands
 
-### opencode not finding memory tools
+### opencode not finding memory commands
 
-1. Run `cortex opencode install` to wire the integration
-2. Restart opencode to pick up changes
-3. Run `cortex opencode status` to verify
+1. Ensure the cortex-ai skill is installed: `cortex opencode status`
+2. If missing, run `cortex opencode install`
+3. Restart opencode to pick up changes
+4. Verify at the terminal: `cortex memory search "."`
 
 ### Skill not loading in opencode
 

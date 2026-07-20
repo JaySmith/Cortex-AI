@@ -49,7 +49,7 @@ cortex bootstrap
 .venv/bin/pip install -e ".[dev]"
 ```
 
-`build/` and `.venv/` are gitignored — they're generated, never committed.
+`.venv/` is gitignored — it's generated, never committed.
 
 ## Working on the encoder (`cortex/encoder/core.py`)
 

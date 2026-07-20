@@ -1,0 +1,387 @@
+"""Tests for CLI memory commands — get, write, search."""
+
+import json
+from pathlib import Path
+
+from typer.testing import CliRunner
+
+from cortex.cli.main import app
+
+runner = CliRunner()
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _write_memory_json(vault_root: Path, notes: dict) -> Path:
+    """Write a memory.json into the vault's encoded directory."""
+    encoded_dir = vault_root / "_sync" / "encoded"
+    encoded_dir.mkdir(parents=True, exist_ok=True)
+    path = encoded_dir / "memory.json"
+    data = {
+        "_meta": {"generated": "2026-01-01T00:00:00", "count": len(notes)},
+        "notes": notes,
+    }
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    return path
+
+
+def _create_note_file(vault_root: Path, note_id: str, note_type: str, body: str = "") -> Path:
+    """Create a raw vault note .md file."""
+    type_dir = vault_root / f"{note_type}s"
+    type_dir.mkdir(parents=True, exist_ok=True)
+    path = type_dir / f"{note_id}.md"
+    content = (
+        f"---\nid: {note_id}\ntype: {note_type}\n---\n\n{body}"
+        if body
+        else (f"---\nid: {note_id}\ntype: {note_type}\n---\n\n")
+    )
+    path.write_text(content, encoding="utf-8")
+    return path
+
+
+# ---------------------------------------------------------------------------
+# cortex memory get
+# ---------------------------------------------------------------------------
+
+
+class TestMemoryGet:
+    def test_get_existing_note(self, vault):
+        """Returns full note content + metadata from memory.json."""
+        _write_memory_json(
+            vault,
+            {
+                "test-note": {
+                    "id": "test-note",
+                    "type": "knowledge",
+                    "category": "patterns",
+                    "tier": "core",
+                    "tags": ["test"],
+                    "aliases": ["Test Note"],
+                    "updated": "2026-01-01",
+                    "content": "This is a test note body.",
+                }
+            },
+        )
+        result = runner.invoke(app, ["memory", "get", "test-note", "--vault", str(vault)])
+        assert result.exit_code == 0
+        assert "# test-note" in result.stdout
+        assert "knowledge" in result.stdout
+        assert "core" in result.stdout
+        assert "This is a test note body" in result.stdout
+
+    def test_get_nonexistent_note(self, vault):
+        """Returns error for missing note."""
+        _write_memory_json(vault, {})
+        result = runner.invoke(app, ["memory", "get", "no-such-note"])
+        assert result.exit_code == 1
+        assert "not found" in result.stdout.lower() or "not found" in result.stderr.lower()
+
+    def test_get_note_from_vault_fallback(self, vault):
+        """Falls back to vault file scan when not in memory.json."""
+        _write_memory_json(vault, {})
+        _create_note_file(vault, "vault-only-note", "knowledge", body="Found via file scan.")
+        result = runner.invoke(app, ["memory", "get", "vault-only-note", "--vault", str(vault)])
+        assert result.exit_code == 0
+        assert "vault-only-note" in result.stdout
+        assert "Found via file scan" in result.stdout
+
+    def test_get_with_custom_vault_path(self, vault):
+        """Respects --vault flag."""
+        _write_memory_json(
+            vault,
+            {
+                "custom-note": {
+                    "id": "custom-note",
+                    "type": "entity",
+                    "tier": "project",
+                    "aliases": ["Custom Note"],
+                    "content": "Custom vault note.",
+                }
+            },
+        )
+        result = runner.invoke(app, ["memory", "get", "custom-note", "--vault", str(vault)])
+        assert result.exit_code == 0
+        assert "custom-note" in result.stdout
+
+    def test_get_no_memory_json_no_vault(self, tmp_path):
+        """Fails cleanly when no vault or memory.json is available."""
+        result = runner.invoke(app, ["memory", "get", "anything"], catch_exceptions=False)
+        # In a tmp_path with no vault, should error
+        assert result.exit_code == 1
+
+
+# ---------------------------------------------------------------------------
+# cortex memory write
+# ---------------------------------------------------------------------------
+
+
+class TestMemoryWrite:
+    def test_write_frontmatter_only(self, vault):
+        """Creates a note file with frontmatter when no --body."""
+        result = runner.invoke(
+            app,
+            [
+                "memory",
+                "write",
+                "--title",
+                "Test Note",
+                "--type",
+                "knowledge",
+                "--tier",
+                "core",
+                "--vault",
+                str(vault),
+            ],
+        )
+        assert result.exit_code == 0
+        assert "Created note" in result.stdout
+
+        note_path = vault / "knowledges" / "test-note.md"
+        assert note_path.exists()
+        content = note_path.read_text(encoding="utf-8")
+        assert "id: test-note" in content
+        assert "type: knowledge" in content
+        assert 'tier: "core"' in content
+        assert 'aliases: ["Test Note"]' in content
+
+    def test_write_with_body(self, vault):
+        """Creates a note file with body content."""
+        result = runner.invoke(
+            app,
+            [
+                "memory",
+                "write",
+                "--title",
+                "Body Note",
+                "--type",
+                "feedback",
+                "--tier",
+                "core",
+                "--body",
+                "This is the body content.",
+                "--vault",
+                str(vault),
+            ],
+        )
+        assert result.exit_code == 0
+        assert "body: included" in result.stdout
+
+        note_path = vault / "feedbacks" / "body-note.md"
+        assert note_path.exists()
+        content = note_path.read_text(encoding="utf-8")
+        assert "This is the body content." in content
+
+    def test_write_with_body_file(self, vault, tmp_path):
+        """Reads body from a file."""
+        body_file = tmp_path / "body.md"
+        body_file.write_text("Body from file.", encoding="utf-8")
+        result = runner.invoke(
+            app,
+            [
+                "memory",
+                "write",
+                "--title",
+                "File Body Note",
+                "--type",
+                "knowledge",
+                "--tier",
+                "project",
+                "--body-file",
+                str(body_file),
+                "--vault",
+                str(vault),
+            ],
+        )
+        assert result.exit_code == 0
+        assert "body: included" in result.stdout
+
+        note_path = vault / "knowledges" / "file-body-note.md"
+        assert note_path.exists()
+        content = note_path.read_text(encoding="utf-8")
+        assert "Body from file." in content
+
+    def test_write_update_existing(self, vault):
+        """Patches existing note body with --update."""
+        _create_note_file(vault, "updatable-note", "knowledge", body="Original body.")
+        result = runner.invoke(
+            app,
+            [
+                "memory",
+                "write",
+                "--title",
+                "Updatable Note",
+                "--type",
+                "knowledge",
+                "--tier",
+                "core",
+                "--body",
+                "Updated body.",
+                "--update",
+                "--vault",
+                str(vault),
+            ],
+        )
+        assert result.exit_code == 0
+        assert "Updated note" in result.stdout
+
+        note_path = vault / "knowledges" / "updatable-note.md"
+        content = note_path.read_text(encoding="utf-8")
+        assert "Updated body." in content
+        assert "Original body." not in content
+
+    def test_write_update_nonexistent_fails(self, vault):
+        """--update on a non-existent note raises error."""
+        result = runner.invoke(
+            app,
+            [
+                "memory",
+                "write",
+                "--title",
+                "No Such Note",
+                "--type",
+                "knowledge",
+                "--tier",
+                "core",
+                "--body",
+                "Body.",
+                "--update",
+                "--vault",
+                str(vault),
+            ],
+        )
+        assert result.exit_code == 1
+        assert (
+            "does not exist" in result.stderr.lower() or "does not exist" in result.stdout.lower()
+        )
+
+    def test_write_existing_no_update_fails(self, vault):
+        """Creating a note that already exists (without --update) raises error."""
+        _create_note_file(vault, "duplicate-note", "knowledge", body="Existing.")
+        result = runner.invoke(
+            app,
+            [
+                "memory",
+                "write",
+                "--title",
+                "Duplicate Note",
+                "--type",
+                "knowledge",
+                "--tier",
+                "core",
+                "--vault",
+                str(vault),
+            ],
+        )
+        assert result.exit_code == 1
+        assert (
+            "already exists" in result.stderr.lower() or "already exists" in result.stdout.lower()
+        )
+
+    def test_write_with_no_encode_flag(self, vault):
+        """--no-encode skips the background encode."""
+        result = runner.invoke(
+            app,
+            [
+                "memory",
+                "write",
+                "--title",
+                "No Encode",
+                "--type",
+                "knowledge",
+                "--tier",
+                "project",
+                "--no-encode",
+                "--vault",
+                str(vault),
+            ],
+        )
+        assert result.exit_code == 0
+        note_path = vault / "knowledges" / "no-encode.md"
+        assert note_path.exists()
+
+    def test_write_conflicting_body_options(self, vault):
+        """--body and --body-file are mutually exclusive."""
+        result = runner.invoke(
+            app,
+            [
+                "memory",
+                "write",
+                "--title",
+                "Conflict",
+                "--type",
+                "knowledge",
+                "--tier",
+                "core",
+                "--body",
+                "inline",
+                "--body-file",
+                "/tmp/foo.md",
+                "--vault",
+                str(vault),
+            ],
+        )
+        assert result.exit_code == 1
+        assert "Conflicting" in result.stderr or "Conflicting" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# cortex memory search
+# ---------------------------------------------------------------------------
+
+
+class TestMemorySearch:
+    def test_search_finds_match(self, vault):
+        """Search returns matching notes."""
+        _write_memory_json(
+            vault,
+            {
+                "jira-tips": {
+                    "id": "jira-tips",
+                    "type": "knowledge",
+                    "category": "patterns",
+                    "tier": "skill:jira",
+                    "aliases": ["Jira Tips"],
+                    "updated": "2026-01-01",
+                    "content": "Use JQL for advanced filtering.",
+                }
+            },
+        )
+        result = runner.invoke(app, ["memory", "search", "jira", "--vault", str(vault)])
+        assert result.exit_code == 0
+        assert "jira-tips" in result.stdout
+
+    def test_search_no_match(self, vault):
+        """Search returns empty results."""
+        _write_memory_json(vault, {})
+        result = runner.invoke(app, ["memory", "search", "nonexistent", "--vault", str(vault)])
+        assert result.exit_code == 0
+        assert "No results" in result.stdout
+
+    def test_search_with_multiple_notes(self, vault):
+        """Search ranks by relevance and returns top results."""
+        _write_memory_json(
+            vault,
+            {
+                "python-style": {
+                    "id": "python-style",
+                    "type": "feedback",
+                    "tier": "core",
+                    "aliases": ["Python Style"],
+                    "content": "Use snake_case in Python.",
+                },
+                "typescript-style": {
+                    "id": "typescript-style",
+                    "type": "feedback",
+                    "tier": "core",
+                    "aliases": ["TypeScript Style"],
+                    "content": "Use camelCase in TypeScript.",
+                },
+            },
+        )
+        result = runner.invoke(app, ["memory", "search", "style", "--vault", str(vault)])
+        assert result.exit_code == 0
+        assert "python-style" in result.stdout
+        assert "typescript-style" in result.stdout

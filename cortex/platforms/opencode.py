@@ -18,7 +18,7 @@ OPENCODE_SKILLS_DIR = OPENCODE_CONFIG_DIR / "skills"
 
 class OpenCodeInstaller(InstallerBase):
     platform_name = "opencode"
-    description = "OpenCode — AI coding assistant with MCP + skills"
+    description = "OpenCode — AI coding assistant with CLI + skills"
 
     def detect(self) -> bool:
         """True if ~/.config/opencode/ exists."""

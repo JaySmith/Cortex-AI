@@ -224,7 +224,7 @@ class HubClient:
 
 **Dependencies:** stdlib only (`urllib.request`, `json`, `uuid`). No `requests` needed.
 
-**Future TypeScript need:** If the MCP server needs to do real-time hive proxying (Phase 5), a TypeScript port of this client will be needed in `mcp/cortex/src/hub-client.ts`. For Phase 3 (CLI commands), Python is sufficient.
+**Note:** The MCP server (`mcp/cortex/`) was removed in v2.0.0 — there is no TypeScript hub client. All hive operations use the Python hub client in `cortex/hub/client.py`.
 
 ---
 
@@ -379,34 +379,16 @@ hive: true          # optional: true (always sync), false (never sync), omit (us
 
 ---
 
-## Phase 5: MCP Server Hive Proxy
+## ~~Phase 5: MCP Server Hive Proxy~~ (Removed in v2.0.0)
 
-**Files:** `mcp/cortex/src/index.ts`, `mcp/cortex/src/vault.ts`
+The MCP server (`mcp/cortex/`) was removed in v2.0.0. Hive push/pull
+operations use the Python CLI (`cortex encode --hive-push/pull`) instead.
+Real-time hive proxying was never implemented — Phase 7 (bearer auth) was
+the predecessor that also remains deferred.
 
-### New env vars:
-```
-HIVE_ENABLED      → "false"
-HIVE_HUB_URL      → "http://localhost:4096/mcp"
-HIVE_MACHINE_ID   → (auto-generated UUID, persisted to _sync/machine-id)
-```
-
-### `memory_write` enhancement:
-```typescript
-// After writeNote() succeeds:
-if (hiveEnabled && noteEligibleForHive(params, config)) {
-    hubPushNote(params).catch(err =>
-        log.warn("hive push failed, will retry on next encode", { error: err.message })
-    );
-}
-```
-
-Fire-and-forget. If the hub is unreachable, the note is still written locally and will sync on the next `--hive-push`.
-
-### `memory_search` enhancement:
-```typescript
-const localResults = searchNotes(query, limit);
-
-if (!hiveEnabled) return localResults;
+**Migration:** Any agent config referencing the MCP server should remove the
+`mcpServers.cortex` entry. The `memory_search` and `memory_get` CLI commands
+replace the MCP tools. Hive is accessed via `cortex encode --hive-push/pull/status`.
 
 const hubResults = await hubSearchNotes(query, limit);
 
@@ -506,7 +488,6 @@ if (HUB_TOKEN) {
 | `agents:` routing | `cortex/encoder/core.py` | Per-target filtering by platform (field already parsed) | Small |
 | `--graph` command | `cortex/encoder/core.py` | Parse `[[wiki-links]]` into edge list + visualization | Medium |
 | Section-aware merge | `cortex/encoder/core.py` + `cortex.hub.client` | Replace timestamp-wins with per-section diff | Future |
-| TypeScript hub client | `mcp/cortex/src/hub-client.ts` | Shared client for real-time MCP proxy | When needed |
 
 ---
 
@@ -517,8 +498,7 @@ Phase 1 (config)
   └─► Phase 2 (hub client)
        ├─► Phase 3 (CLI commands)
        │    └─► Phase 6 (skill commands)
-       └─► Phase 5 (MCP proxy)
-            └─► Phase 6 (skill commands)
+       └─► ~~Phase 5 (MCP proxy)~~ (removed in v2.0.0)
 
 Phase 4 (frontmatter) ─── independent, can run parallel with 1-3
 
@@ -536,7 +516,7 @@ Phase 8+ (ROADMAP items) ─── independent, parallel with everything
 | `SCHEMA_VERSION` | 1 → 2 | — |
 | cortex-ai release | New feature (hive) | MINOR (1.3.0) |
 | cortex-hub | No code changes for phases 1-6 | None |
-| MCP server `package.json` | New env vars, no tool changes | PATCH |
+| ~~MCP server `package.json`~~ | (removed in v2.0.0) | — |
 
 ---
 

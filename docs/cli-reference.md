@@ -231,13 +231,39 @@ cortex memory search "sprint calendar" --vault ~/Cortex
 
 ---
 
+## cortex memory get
+
+Fetch a single memory note by its id.
+
+```
+cortex memory get ID [--vault VAULT]
+```
+
+| Argument / Flag | Description |
+|-----------------|-------------|
+| `ID` | Note id slug (required) |
+| `--vault` | Vault path (auto-detect if omitted) |
+
+Looks up the note in `memory.json` first. If not found, falls back to scanning
+vault files for `<id>.md`. Returns full content and metadata.
+
+```
+cortex memory get askdel
+cortex memory get jira-rest-api --vault ~/Cortex
+```
+
+---
+
 ## cortex memory write
 
-Write a metadata-only note to the vault.
+Write a memory note to the vault. Without `--body` or `--body-file`, writes
+frontmatter only.
 
 ```
 cortex memory write --title TITLE --type TYPE --tier TIER
-                    [--tags TAGS] [--category CAT] [--vault VAULT]
+                    [--tags TAGS] [--category CAT]
+                    [--body TEXT | --body-file PATH]
+                    [--update] [--no-encode] [--vault VAULT]
 ```
 
 | Flag | Description |
@@ -247,14 +273,21 @@ cortex memory write --title TITLE --type TYPE --tier TIER
 | `--tier` | Tier: `core`, `skill:<name>`, `project`, `vault-only` |
 | `--tags` | Comma-separated tags |
 | `--category` | Category label |
+| `--body` | Note body content (inline text) |
+| `--body-file` | Path to file containing note body content |
+| `--update` | Patch an existing note (update body + bump date) |
+| `--no-encode` | Skip automatic encode after write (for batch operations) |
 | `--vault` | Vault path (auto-detect if omitted) |
 
-Creates the note file with frontmatter. Run `cortex encode` afterward to
-rebuild encoded output.
+Creates or updates a note file with YAML frontmatter and optional body. By
+default triggers `cortex encode` in the background after writing.
 
 ```
 cortex memory write --title "TypeScript Style" --type feedback --tier core
-cortex memory write --title "Jira Tips" --type knowledge --tier skill:jira --tags "jira,workflow"
+cortex memory write --title "Jira Tips" --type knowledge --tier skill:jira --body "Use JQL for complex queries"
+cortex memory write --title "Sprint Notes" --type session --tier vault-only --body-file ./notes.md
+cortex memory write --title "Jira Tips" --type knowledge --tier skill:jira --body "Updated content" --update
+cortex memory write --title "Batch Item" --type knowledge --tier project --no-encode
 ```
 
 ---

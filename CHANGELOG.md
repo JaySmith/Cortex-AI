@@ -19,9 +19,9 @@ data, and a MAJOR release does not have to bump the schema.
 ### When to bump the release version (SemVer)
 
 - **MAJOR** (`2.0.0`) — a breaking change for existing users: removing/renaming a
-  `cortex.yaml` key, a CLI flag, or an MCP tool; a surprising change to default
+  `cortex.yaml` key, a CLI flag; a surprising change to default
   behaviour; or a schema bump with **no** automatic migration.
-- **MINOR** (`1.1.0`) — a backward-compatible feature: new CLI flag, new MCP tool,
+- **MINOR** (`1.1.0`) — a backward-compatible feature: new CLI flag, new CLI command,
   new config key with a safe default; or a schema bump that ships an **automatic**
   migration.
 - **PATCH** (`1.0.1`) — a bug fix, doc fix, or internal refactor with no
@@ -52,7 +52,6 @@ PATCH-only changes (bug/doc/refactor, no user-visible effect) may accumulate und
 **Checklist for a release commit:**
 - [ ] `VERSION` bumped (and `SCHEMA_VERSION` if schema changed)
 - [ ] CHANGELOG `[Unreleased]` promoted to `[x.y.z] — YYYY-MM-DD`
-- [ ] MCP rebuilt so `package.json` matches (`cd mcp/cortex && npm run build`)
 - [ ] live install redeployed (`cortex install --upgrade`) and agent restarted
 
 ### When to bump the schema version

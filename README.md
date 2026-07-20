@@ -52,7 +52,8 @@ cortex encode --list                            # see all notes + tiers
 | `cortex status` | Installation health |
 | `cortex doctor` | Validate all platform integrations |
 | `cortex memory search <q>` | Search encoded memory |
-| `cortex memory write` | Create a vault note |
+| `cortex memory get <id>` | Fetch a single note by id |
+| `cortex memory write` | Create or update a vault note |
 | `cortex import` | Import existing agent context |
 | `cortex version` | Print version info |
 
@@ -72,17 +73,15 @@ contents telling the agent what skill and project notes exist without loading
 their content. See [docs/memory-model.md](docs/memory-model.md) for full
 detail.
 
-## Runtime Tools
+## CLI Memory Commands
 
-The agent gets these tools for mid-conversation memory operations:
+The `cortex` CLI provides these commands for mid-conversation memory operations:
 
-| Tool | Kind | Does |
-|------|------|------|
-| `memory_search` | read | Keyword search across encoded notes |
-| `memory_get` | read | Fetch one note by id |
-| `memory_related` | read | Notes related by shared tags + category |
-| `memory_write` | write | Create/update a note, then auto-encode |
-| `memory_reload` | admin | Force-reload the index |
+| Command | Kind | Does |
+|---------|------|------|
+| `cortex memory search <q>` | read | Keyword search across encoded notes |
+| `cortex memory get <id>`  | read | Fetch one note by id |
+| `cortex memory write`     | write | Create/update a note, then auto-encode |
 
 ## Supported Agents
 
