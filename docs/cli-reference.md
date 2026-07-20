@@ -254,6 +254,53 @@ cortex memory get jira-rest-api --vault ~/Cortex
 
 ---
 
+## cortex lint
+
+Lint a Cortex vault for common issues.
+
+```
+cortex lint [--vault VAULT] [--strict] [--fix] [--note ID] [--json] [--rules]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--vault` | Vault path (auto-detect if omitted) |
+| `--strict` | Treat warnings as errors |
+| `--fix` | Auto-fix fixable issues (missing-type, missing-tier, missing-aliases) |
+| `--note ID` | Lint a single note by id |
+| `--json` | Output results as JSON |
+| `--rules` | List available rules and exit |
+
+**Rules:**
+
+| Severity | Rule | Description | Auto-fix |
+|----------|------|-------------|:--------:|
+| E | `missing-id` | Note is missing an `id` field in frontmatter | |
+| E | `missing-type` | Note is missing a `type` field in frontmatter | ✓ |
+| E | `missing-tier` | Note is missing a `tier` field in frontmatter | ✓ |
+| E | `invalid-tier` | Note has an unrecognized tier value | |
+| E | `duplicate-id` | Multiple files share the same `id` | |
+| W | `missing-aliases` | Note is missing an `aliases` field | ✓ |
+| W | `slug-mismatch` | Filename stem does not match the `id` field | |
+| W | `dangling-wiki-link` | Wiki-link targets a non-existent note | |
+| W | `non-slug-id` | `id` contains non-slug characters | |
+| I | `missing-updated` | Note is missing an `updated` date | |
+| I | `empty-body` | Note has no body content | |
+
+Exit codes: 0 = clean, 1 = errors found.
+
+```
+cortex lint                          # scan auto-detected vault
+cortex lint --vault ~/Cortex         # explicit vault
+cortex lint --strict                 # warnings become errors
+cortex lint --fix                    # auto-fix type/tier/aliases
+cortex lint --note my-note           # single note
+cortex lint --json                   # machine-readable output
+cortex lint --rules                  # list rules
+```
+
+---
+
 ## cortex memory write
 
 Write a memory note to the vault. Without `--body` or `--body-file`, writes

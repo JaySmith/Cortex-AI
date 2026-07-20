@@ -305,8 +305,35 @@ Disable with `strip_wiki_links: false` in cortex.yaml.
 
 ## Lint & Validation
 
-No built-in linting yet, but good habits:
+Use `cortex lint` to scan your vault for common issues:
 
+```
+cortex lint                    # scan auto-detected vault
+cortex lint --vault ~/Cortex   # explicit vault
+cortex lint --strict           # treat warnings as errors
+cortex lint --fix              # auto-fix type/tier/aliases
+cortex lint --rules            # list all available rules
+```
+
+**Rules:**
+
+| Severity | Rule | Auto-fix | Description |
+|----------|------|:--------:|-------------|
+| E | `missing-id` | | Note is missing an `id` field |
+| E | `missing-type` | ✓ | Note is missing a `type` field |
+| E | `missing-tier` | ✓ | Note is missing a `tier` field |
+| E | `invalid-tier` | | Unrecognized tier value |
+| E | `duplicate-id` | | Multiple files share the same id |
+| W | `missing-aliases` | ✓ | No `aliases` field — title defaults to slug |
+| W | `slug-mismatch` | | Filename stem does not match `id` |
+| W | `dangling-wiki-link` | | Wiki-link targets a non-existent note |
+| W | `non-slug-id` | | ID uses non-slug characters |
+| I | `missing-updated` | | No `updated` date — freshness untracked |
+| I | `empty-body` | | Note has no body content |
+
+Good habits:
+
+- Run `cortex lint` before committing vault changes
 - Run `cortex encode --list` to see all notes + tiers
 - Run `cortex encode --dry-run` before syncing
 - Check `_sync/last-sync.json` for state tracking
