@@ -38,7 +38,7 @@ targets:
   core_context:
     enabled: true
     type: core-context
-    output_file: "/path/to/encoded/opencode/core-context.md"
+    output_file: "<vault>/_sync/encoded/core-context.md"
 
     # Optional: automatically wire this file into opencode.jsonc "instructions"
     opencode_config: "/path/to/.config/opencode/opencode.jsonc"
@@ -59,13 +59,13 @@ targets:
   projects:
     enabled: true
     type: project-context
-    output_dir: "/path/to/encoded/opencode/projects"
+    output_dir: "<vault>/_sync/encoded/projects"
 
   # Structured JSON for Python agent frameworks
   python-agents:
     enabled: true
     type: json
-    output_file: "/path/to/encoded/memory.json"
+    output_file: "<vault>/_sync/encoded/memory.json"
     # Only include these note types in the JSON output
     include_types:
       - knowledge
@@ -75,13 +75,6 @@ targets:
       - draft
       - archived
       - internal
-
-  # Legacy flat-file format (usually disabled — opencode is the primary consumer)
-  claude-code:
-    enabled: false
-    type: flat-files
-    output_dir: "/path/to/.claude/memory"
-    index_file: "/path/to/.claude/MEMORY.md"
 
 # Replace [[wiki links]] with plain text when encoding?
 strip_wiki_links: true

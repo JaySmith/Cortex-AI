@@ -13,7 +13,7 @@ tags: [project, demo]
 # Example Project
 
 A placeholder project note showing how `tier: project` notes are encoded into
-per-project context files under `encoded/opencode/projects/`.
+per-project context files under `encoded/projects/`.
 
 ## Status
 - Phase: delivery

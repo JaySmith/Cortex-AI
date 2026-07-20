@@ -6,7 +6,7 @@ TIERED MODEL (driven by each note's `tier` frontmatter):
   core           -> eager: concatenated into a single core-context.md
   <custom-name>  -> any string listed in eager_tiers is also eager (e.g. "jira")
   skill:<name>   -> lazy: encoded body embedded into skills/<name>/reference.md
-  project        -> lazy: written to encoded/opencode/projects/<id>.md
+   project        -> lazy: written to encoded/projects/<id>.md
   vault-only     -> never encoded.
 
 Config is read from cortex.yaml (co-located with this script by default;

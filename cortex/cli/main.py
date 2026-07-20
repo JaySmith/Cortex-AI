@@ -252,10 +252,9 @@ def install(
     vault_path = vault_path.resolve()
     sync_dir = vault_path / "_sync"
     encoded_dir = sync_dir / "encoded"
-    skills_dir = encoded_dir / "skills"
     memory_json = encoded_dir / "memory.json"
-    core_context = encoded_dir / "opencode" / "core-context.md"
-    projects_dir = encoded_dir / "opencode" / "projects"
+    core_context = encoded_dir / "core-context.md"
+    projects_dir = encoded_dir / "projects"
     config_file = sync_dir / "cortex.yaml"
     opencode_skills_dir = Path.home() / ".config" / "opencode" / "skills"
 
@@ -348,7 +347,7 @@ def install(
             f"  skills:\n"
             f"    enabled: true\n"
             f"    type: skill-embed\n"
-            f'    skills_dir: "{skills_dir}"\n'
+            f'    skills_dir: "{opencode_skills_dir}"\n'
             f'    embed_filename: "reference.md"\n'
             f"\n"
             f"  projects:\n"
@@ -386,7 +385,7 @@ def install(
                 continue
             m = re.search(r"^tier:\s*skill:(\S+)", text, re.M)
             if m:
-                (skills_dir / m.group(1)).mkdir(parents=True, exist_ok=True)
+                (opencode_skills_dir / m.group(1)).mkdir(parents=True, exist_ok=True)
 
     # Install skill
     skill_src = repo_root / "skills" / "cortex-ai" / "SKILL.md"
