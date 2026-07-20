@@ -1,9 +1,25 @@
 # Bug Fix Brief: `cortex import` writes to the wrong vault
 
-- **Status:** Fixed in commit `05ca27b`
+- **Status:** Partially resolved in v2.0.0; full fix planned for v2.1.0
 - **Reported:** 2026-07-20
 - **Affected version:** 1.4.0
 - **Component:** `cortex import` CLI command
+
+## What v2.0.0 already fixed
+
+`cortex import` now calls `_find_vault()` (the shared helper) instead of its own
+inline hardcoded-path block (commit `05ca27b`), and `import_cmd` in `main.py`
+guards with a `_sync/cortex.yaml` check that errors clearly. This prevents the
+original symptom (notes landing in CWD) for most users.
+
+## What remains (v2.1.0)
+
+The two inconsistent helpers (`_find_vault`, `_find_vault_path`) are still not
+consolidated. `CORTEX_VAULT` env var and the `~/cortex-ai` default do not exist.
+`run_import` in `import_agent.py` still has no vault guard of its own — the guard
+only lives in `import_cmd`, so calling `run_import` directly (or via the standalone
+`main()`) bypasses it. The remaining work is the Option C design below; see
+`ROADMAP.md` for the v2.1.0 plan.
 
 ## Symptom
 

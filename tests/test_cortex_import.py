@@ -1,6 +1,7 @@
 """Tests for cortex import — pure helpers and import logic."""
 
 import json
+from pathlib import Path
 
 from cortex.cli.commands.import_agent import (
     backup_file,
@@ -192,3 +193,91 @@ class TestFirstExisting:
 
     def test_empty_list(self):
         assert first_existing([]) is None
+
+
+# ---------------------------------------------------------------------------
+# Vault auto-detection
+# ---------------------------------------------------------------------------
+
+
+class TestVaultAutoDetection:
+    """Test that import finds the vault correctly via _find_vault()."""
+
+    def test_vault_named_cortex_ai(self, tmp_path, monkeypatch):
+        """Vault named 'cortex-ai' under home is found."""
+        vault = tmp_path / "cortex-ai"
+        vault.mkdir()
+        sync = vault / "_sync"
+        sync.mkdir()
+        (sync / "cortex.yaml").write_text("targets: {}\n")
+
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        # Also ensure CWD is not the vault
+        other = tmp_path / "other"
+        other.mkdir()
+        monkeypatch.chdir(other)
+
+        from cortex.cli.main import _find_vault
+        found = _find_vault()
+        assert found == vault
+
+    def test_cwd_is_vault(self, tmp_path, monkeypatch):
+        """When CWD is the vault, _find_vault returns CWD."""
+        vault = tmp_path / "my-vault"
+        vault.mkdir()
+        sync = vault / "_sync"
+        sync.mkdir()
+        (sync / "cortex.yaml").write_text("targets: {}\n")
+
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        monkeypatch.chdir(vault)
+
+        from cortex.cli.main import _find_vault
+        found = _find_vault()
+        assert found == vault
+
+    def test_no_vault_returns_cwd_with_warning(self, tmp_path, monkeypatch):
+        """When no vault exists anywhere, _find_vault returns CWD."""
+        # Ensure no _sync/cortex.yaml exists under home
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        other = tmp_path / "some-dir"
+        other.mkdir()
+        monkeypatch.chdir(other)
+
+        from cortex.cli.main import _find_vault
+        found = _find_vault()
+        assert found == other
+
+    def test_import_with_vault_named_cortex_ai(self, tmp_path, monkeypatch):
+        """cortex import --dry-run resolves vault named 'cortex-ai' and does not error."""
+        vault = tmp_path / "cortex-ai"
+        vault.mkdir()
+        sync = vault / "_sync"
+        sync.mkdir()
+        (sync / "cortex.yaml").write_text("targets: {}\n")
+
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        other = tmp_path / "other"
+        other.mkdir()
+        monkeypatch.chdir(other)
+
+        from typer.testing import CliRunner
+        from cortex.cli.main import app
+        runner = CliRunner()
+        result = runner.invoke(app, ["import", "--dry-run"])
+        # Should succeed because vault was found
+        assert result.exit_code == 0
+
+    def test_import_no_vault_errors(self, tmp_path, monkeypatch):
+        """cortex import with no vault anywhere errors, not silently writes to CWD."""
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        other = tmp_path / "some-dir"
+        other.mkdir()
+        monkeypatch.chdir(other)
+
+        from typer.testing import CliRunner
+        from cortex.cli.main import app
+        runner = CliRunner()
+        result = runner.invoke(app, ["import", "--dry-run"])
+        assert result.exit_code == 1
+        assert "Vault path" in result.stderr or "No vault" in result.stderr

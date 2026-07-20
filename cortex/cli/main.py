@@ -106,8 +106,18 @@ def _find_vault() -> Path:
         return cwd
     home = Path.home()
     for p in home.iterdir():
-        if p.is_dir() and (p / "_sync" / "cortex.yaml").exists():
-            return p
+        if not p.is_dir():
+            continue
+        try:
+            if (p / "_sync" / "cortex.yaml").exists():
+                return p
+        except PermissionError:
+            continue
+    typer.echo(
+        "  WARNING: No vault found — defaulting to current directory. "
+        "Pass --vault to specify your vault path.",
+        err=True,
+    )
     return Path.cwd()
 
 
@@ -832,8 +842,13 @@ def _find_vault_path(vault: str | None) -> Path | None:
         return cwd
     home = Path.home()
     for p in home.iterdir():
-        if p.is_dir() and (p / "_sync" / "cortex.yaml").exists():
-            return p
+        if not p.is_dir():
+            continue
+        try:
+            if (p / "_sync" / "cortex.yaml").exists():
+                return p
+        except PermissionError:
+            continue
     return None
 
 
