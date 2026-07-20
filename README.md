@@ -7,35 +7,42 @@ patterns, and projects.
 
 ```
 Build   (vault -> agent):  notes  -> cortex encode  -> core-context.md + memory.json
-Capture (agent -> vault):  agent  -> memory write   -> note written -> encode (auto)
+Capture (agent -> vault):  agent  -> cortex memory write  -> note written -> encode (auto)
 ```
 
 ## Install
 
-Requires **Python 3.10+**.
+Requires **Python 3.10+** and [uv](https://docs.astral.sh/uv/).
 
 ```bash
-git clone https://github.com/JaySmith/Cortex-AI.git cortex-ai
-cd cortex-ai
-cortex bootstrap
+# 1. Install the CLI tool (one-time)
+uv tool install git+https://github.com/JaySmith/Cortex-AI.git
+
+# 2. Set up a vault
 cortex install ~/Cortex
 ```
 
-`cortex install` is interactive — it prompts for your vault path (press
-Enter for the bundled example vault). For non-interactive installs:
+`cortex install` creates a config, installs the skill, and runs the first
+encode. For non-interactive installs:
 
 ```bash
 cortex install /path/to/your/vault
+```
+
+To update after a new release:
+
+```bash
+uv tool install --reinstall cortex-ai
 ```
 
 ## Quick Start
 
 ```bash
 cortex status                                    # verify install
+cortex memory list                               # see all notes with type, tier
 cortex memory write --title "My Stack" --type feedback --tier core
-cortex encode                                   # rebuild output
+cortex encode                                    # rebuild output
 cortex memory search "stack"                     # search memory
-cortex encode --list                            # see all notes + tiers
 ```
 
 ## Common Commands
@@ -47,12 +54,12 @@ cortex encode --list                            # see all notes + tiers
 | `cortex uninstall --vault <v>` | Revert installed assets (notes kept) |
 | `cortex encode` | Rebuild all encoded output |
 | `cortex encode --dry-run` | Preview without writing |
-| `cortex encode --list` | List every note with tier/type |
 | `cortex encode --check` | Version/schema health check |
 | `cortex status` | Installation health |
 | `cortex doctor` | Validate all platform integrations |
 | `cortex memory search <q>` | Search encoded memory |
 | `cortex memory get <id>` | Fetch a single note by id |
+| `cortex memory list` | List all notes (filter by `--tier`, `--type`) |
 | `cortex memory write` | Create or update a vault note |
 | `cortex import` | Import existing agent context |
 | `cortex version` | Print version info |
@@ -81,6 +88,7 @@ The `cortex` CLI provides these commands for mid-conversation memory operations:
 |---------|------|------|
 | `cortex memory search <q>` | read | Keyword search across encoded notes |
 | `cortex memory get <id>`  | read | Fetch one note by id |
+| `cortex memory list`      | read | Table of all notes (filter by `--tier`, `--type`) |
 | `cortex memory write`     | write | Create/update a note, then auto-encode |
 
 ## Supported Agents
