@@ -309,7 +309,7 @@ Use `cortex lint` to scan your vault for common issues:
 
 ```
 cortex lint                    # scan auto-detected vault
-cortex lint --vault ~/Cortex   # explicit vault
+cortex lint --vault ~/cortex-ai   # explicit vault
 cortex lint --strict           # treat warnings as errors
 cortex lint --fix              # auto-fix type/tier/aliases
 cortex lint --rules            # list all available rules

@@ -52,10 +52,10 @@ cortex install [VAULT] [--upgrade] [--no-encode] [--dry-run]
 
 ```
 cortex install                          # interactive
-cortex install ~/Cortex                 # non-interactive
-cortex install --upgrade ~/Cortex       # upgrade existing
-cortex install --dry-run ~/Cortex       # preview only
-cortex install --upgrade --no-encode ~/Cortex  # skip re-encode
+cortex install ~/cortex-ai                 # non-interactive
+cortex install --upgrade ~/cortex-ai       # upgrade existing
+cortex install --dry-run ~/cortex-ai       # preview only
+cortex install --upgrade --no-encode ~/cortex-ai  # skip re-encode
 ```
 
 ---
@@ -77,9 +77,9 @@ cortex uninstall --vault VAULT [--latest] [--backup NAME] [--apply] [--purge]
 | `--purge` | off | Also delete `_sync/encoded/` |
 
 ```
-cortex uninstall --vault ~/Cortex --latest          # preview
-cortex uninstall --vault ~/Cortex --latest --apply  # revert
-cortex uninstall --vault ~/Cortex --latest --apply --purge  # full cleanup
+cortex uninstall --vault ~/cortex-ai --latest          # preview
+cortex uninstall --vault ~/cortex-ai --latest --apply  # revert
+cortex uninstall --vault ~/cortex-ai --latest --apply --purge  # full cleanup
 ```
 
 ---
@@ -114,7 +114,7 @@ cortex encode --dry-run                # preview
 cortex encode --list                   # see all notes
 cortex encode --check                  # version/schema health
 cortex encode --show-config            # resolved paths
-cortex encode --config ~/Cortex/_sync/cortex.yaml  # explicit config
+cortex encode --config ~/cortex-ai/_sync/cortex.yaml  # explicit config
 ```
 
 ---
@@ -136,7 +136,7 @@ status, opencode config found.
 
 ```
 cortex status
-cortex status --vault ~/Cortex
+cortex status --vault ~/cortex-ai
 ```
 
 ---
@@ -190,7 +190,7 @@ for manual refinement.
 ```
 cortex import --dry-run          # preview
 cortex import                    # import into auto-detected vault
-cortex import --vault ~/Cortex   # explicit vault
+cortex import --vault ~/cortex-ai   # explicit vault
 ```
 
 ---
@@ -226,7 +226,7 @@ category, and body content.
 
 ```
 cortex memory search jira
-cortex memory search "sprint calendar" --vault ~/Cortex
+cortex memory search "sprint calendar" --vault ~/cortex-ai
 ```
 
 ---
@@ -249,7 +249,7 @@ vault files for `<id>.md`. Returns full content and metadata.
 
 ```
 cortex memory get askdel
-cortex memory get jira-rest-api --vault ~/Cortex
+cortex memory get jira-rest-api --vault ~/cortex-ai
 ```
 
 ---
@@ -291,7 +291,7 @@ Exit codes: 0 = clean, 1 = errors found.
 
 ```
 cortex lint                          # scan auto-detected vault
-cortex lint --vault ~/Cortex         # explicit vault
+cortex lint --vault ~/cortex-ai         # explicit vault
 cortex lint --strict                 # warnings become errors
 cortex lint --fix                    # auto-fix type/tier/aliases
 cortex lint --note my-note           # single note

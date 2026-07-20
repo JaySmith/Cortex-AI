@@ -19,7 +19,7 @@ Requires **Python 3.10+** and [uv](https://docs.astral.sh/uv/).
 uv tool install git+https://github.com/JaySmith/Cortex-AI.git
 
 # 2. Set up a vault
-cortex install ~/Cortex
+cortex install ~/cortex-ai
 ```
 
 `cortex install` creates a config, installs the skill, and runs the first

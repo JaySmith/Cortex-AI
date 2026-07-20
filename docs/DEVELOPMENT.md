@@ -85,10 +85,10 @@ The safe, repeatable cycle for a change that touches the live install:
 #    cortex/encoder/core.py / skills/cortex-ai/SKILL.md
 
 # 2. Preview the deploy (changes nothing)
-cortex install --upgrade --dry-run ~/Cortex
+cortex install --upgrade --dry-run ~/cortex-ai
 
 # 3. Apply, then restart your agent to load the new skill
-cortex install --upgrade ~/Cortex
+cortex install --upgrade ~/cortex-ai
 ```
 
 `cortex install --upgrade` backs up every live target first, copies repo
@@ -155,14 +155,14 @@ Release checklist:
 1. Bump `VERSION` (and `SCHEMA_VERSION` + migration if contract changed).
 2. Promote CHANGELOG `[Unreleased]` to `[x.y.z] — YYYY-MM-DD`.
 3. Commit as `chore: release x.y.z`.
-4. Deploy: `cortex install --upgrade ~/Cortex`, then restart the agent.
+4. Deploy: `cortex install --upgrade ~/cortex-ai`, then restart the agent.
 5. Verify: `cortex encode --check` should report both versions in sync.
 
 ## Reverting a broken deploy
 
 ```bash
-cortex uninstall --vault ~/Cortex --latest          # preview
-cortex uninstall --vault ~/Cortex --latest --apply  # revert
+cortex uninstall --vault ~/cortex-ai --latest          # preview
+cortex uninstall --vault ~/cortex-ai --latest --apply  # revert
 ```
 
 ## See also
