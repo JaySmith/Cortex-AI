@@ -39,14 +39,10 @@ def find_manifests(vault: Path) -> list[Path]:
     return sorted(backups.glob("*/manifest.json"))
 
 
-def resolve_manifests(
-    vault: Path, latest: bool, backup: str | None
-) -> list[Path]:
+def resolve_manifests(vault: Path, latest: bool, backup: str | None) -> list[Path]:
     manifests = find_manifests(vault)
     if not manifests:
-        sys.exit(
-            f"No install/import manifests found under {vault / '_sync' / 'backups'}"
-        )
+        sys.exit(f"No install/import manifests found under {vault / '_sync' / 'backups'}")
     if backup:
         target = vault / "_sync" / "backups" / backup / "manifest.json"
         if not target.exists():
@@ -57,9 +53,7 @@ def resolve_manifests(
     return list(reversed(manifests))
 
 
-def restore_from(
-    manifest_path: Path, action: dict, apply: bool
-) -> None:
+def restore_from(manifest_path: Path, action: dict, apply: bool) -> None:
     backup_dir = manifest_path.parent
     original = Path(action["path"])
     saved_as = action.get("saved_as")
@@ -154,21 +148,11 @@ def run_uninstall(
 
     print()
     if apply:
-        print(
-            "Done. Cortex plumbing removed; your notes remain in the vault."
-        )
-        print(
-            "You may also want to remove the MCP 'cortex' entry from your "
-            "agent config,"
-        )
-        print(
-            "and delete the cloned cortex-distiller repo if you no longer "
-            "need it."
-        )
+        print("Done. Cortex plumbing removed; your notes remain in the vault.")
+        print("You may also want to remove the MCP 'cortex' entry from your agent config,")
+        print("and delete the cloned cortex-distiller repo if you no longer need it.")
     else:
-        print(
-            "Dry-run complete. Re-run with --apply to make these changes."
-        )
+        print("Dry-run complete. Re-run with --apply to make these changes.")
 
     return 0
 
@@ -176,8 +160,7 @@ def run_uninstall(
 def main() -> None:
     ap = argparse.ArgumentParser(
         description=(
-            "Revert Cortex changes using install/import manifests. "
-            "Keeps your vault notes."
+            "Revert Cortex changes using install/import manifests. Keeps your vault notes."
         )
     )
     ap.add_argument(
@@ -203,10 +186,7 @@ def main() -> None:
     ap.add_argument(
         "--purge",
         action="store_true",
-        help=(
-            "Also delete _sync/distilled (generated output). "
-            "Notes are still kept."
-        ),
+        help=("Also delete _sync/distilled (generated output). Notes are still kept."),
     )
     args = ap.parse_args()
 

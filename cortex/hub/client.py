@@ -17,9 +17,9 @@ from __future__ import annotations
 import json
 import logging
 import time
-import uuid
 import urllib.error
 import urllib.request
+import uuid
 from typing import Any
 
 log = logging.getLogger("hive_client")
@@ -49,42 +49,45 @@ class HubClient:
 
     def connect(self) -> None:
         """MCP initialize handshake. Extracts session ID from response headers."""
-        resp = self._raw_post({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2025-03-26",
-                "capabilities": {},
-                "clientInfo": {"name": "cortex-hive", "version": "1.0.0"},
-            },
-        })
+        resp = self._raw_post(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-03-26",
+                    "capabilities": {},
+                    "clientInfo": {"name": "cortex-hive", "version": "1.0.0"},
+                },
+            }
+        )
         self.session_id = resp["headers"].get("mcp-session-id")
         if not self.session_id:
             raise HubConnectionError(
-                "Hub did not return mcp-session-id. "
-                f"Is this really an MCP server at {self.url}?"
+                f"Hub did not return mcp-session-id. Is this really an MCP server at {self.url}?"
             )
         # Send initialized notification (no id field — it's a notification)
-        self._raw_post({
-            "jsonrpc": "2.0",
-            "method": "notifications/initialized",
-        })
+        self._raw_post(
+            {
+                "jsonrpc": "2.0",
+                "method": "notifications/initialized",
+            }
+        )
 
     def call_tool(self, name: str, args: dict[str, Any] | None = None) -> Any:
         """Call an MCP tool on the hub. Returns parsed result content."""
         try:
-            resp = self._raw_post({
-                "jsonrpc": "2.0",
-                "id": str(uuid.uuid4()),
-                "method": "tools/call",
-                "params": {"name": name, "arguments": args or {}},
-            })
+            resp = self._raw_post(
+                {
+                    "jsonrpc": "2.0",
+                    "id": str(uuid.uuid4()),
+                    "method": "tools/call",
+                    "params": {"name": name, "arguments": args or {}},
+                }
+            )
             for msg in self._parse_sse(resp["body"]):
                 if "error" in msg:
-                    raise HubConnectionError(
-                        f"Hub tool error on {name}: {msg['error']}"
-                    )
+                    raise HubConnectionError(f"Hub tool error on {name}: {msg['error']}")
                 if "result" in msg:
                     content = msg["result"].get("content", [])
                     if content and content[0].get("text"):
@@ -99,16 +102,17 @@ class HubClient:
                 return self._reconnect_and_retry(name, args)
             raise
 
-    def memory_set(
-        self, key: str, value: str, tags: list[str] | None = None
-    ) -> Any:
+    def memory_set(self, key: str, value: str, tags: list[str] | None = None) -> Any:
         """Store a memory on the hub."""
-        return self.call_tool("hub_memory_set", {
-            "key": key,
-            "value": value,
-            "tags": tags or [],
-            "agent": "cortex",
-        })
+        return self.call_tool(
+            "hub_memory_set",
+            {
+                "key": key,
+                "value": value,
+                "tags": tags or [],
+                "agent": "cortex",
+            },
+        )
 
     def memory_get(self, key: str) -> Any:
         """Retrieve a memory by key."""
@@ -125,14 +129,10 @@ class HubClient:
 
     # --- Internal ---
 
-    def _reconnect_and_retry(
-        self, name: str, args: dict[str, Any] | None
-    ) -> Any:
+    def _reconnect_and_retry(self, name: str, args: dict[str, Any] | None) -> Any:
         """Reconnect to the hub and retry the failed tool call."""
         if self.retry_count >= self.max_retries:
-            raise HubConnectionError(
-                f"Max retries ({self.max_retries}) exceeded"
-            )
+            raise HubConnectionError(f"Max retries ({self.max_retries}) exceeded")
 
         self.retry_count += 1
         delay_ms = min(1000 * (2 ** (self.retry_count - 1)), 30_000)
@@ -168,21 +168,15 @@ class HubClient:
         """POST to the hub. Returns {body: str, headers: dict}."""
         data = json.dumps(body).encode("utf-8")
         headers = {**self._headers(), "Content-Length": str(len(data))}
-        req = urllib.request.Request(
-            self.url, data=data, headers=headers, method="POST"
-        )
+        req = urllib.request.Request(self.url, data=data, headers=headers, method="POST")
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                 resp_headers = dict(resp.headers)
                 resp_body = resp.read().decode("utf-8")
         except urllib.error.URLError as e:
-            raise HubConnectionError(
-                f"Cannot reach hub at {self.url}: {e}"
-            ) from e
+            raise HubConnectionError(f"Cannot reach hub at {self.url}: {e}") from e
         except OSError as e:
-            raise HubConnectionError(
-                f"Network error connecting to hub: {e}"
-            ) from e
+            raise HubConnectionError(f"Network error connecting to hub: {e}") from e
         return {"body": resp_body, "headers": resp_headers}
 
     @staticmethod

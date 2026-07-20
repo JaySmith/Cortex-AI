@@ -17,27 +17,25 @@ All user-facing operations consolidated behind a single CLI:
 
 from __future__ import annotations
 
+import json
 import os
 import re
-import sys
-import json
 import shutil
 import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 import typer
 
-from cortex import __version__
 from cortex.cli.commands import import_agent as import_agent_module
 from cortex.cli.commands import uninstall as uninstall_cmd
 from cortex.distiller.core import (
     cortex_version,
-    schema_version,
-    run_distill,
     load_config,
     read_vault_schema,
+    run_distill,
+    schema_version,
 )
 
 app = typer.Typer(
@@ -127,7 +125,7 @@ def _write_manifest(
 
 @app.command()
 def bootstrap(
-    repo_root: Optional[str] = typer.Argument(
+    repo_root: str | None = typer.Argument(
         None,
         help="Repo root (default: auto-detect)",
     ),
@@ -179,9 +177,9 @@ def bootstrap(
             check=True,
         )
 
-    typer.echo(f"\nBootstrap complete. Activate with:")
+    typer.echo("\nBootstrap complete. Activate with:")
     typer.echo(f"  source {venv_dir}/bin/activate")
-    typer.echo(f"  cortex install")
+    typer.echo("  cortex install")
 
 
 # ---------------------------------------------------------------------------
@@ -203,7 +201,7 @@ _DISTILLER_FILES = [
 
 @app.command()
 def install(
-    vault: Optional[str] = typer.Argument(
+    vault: str | None = typer.Argument(
         None,
         help="Vault path (default: auto-detect or prompt)",
     ),
@@ -232,9 +230,7 @@ def install(
     repo_root = _REPO_ROOT
 
     if not vault:
-        vault = typer.prompt(
-            "Vault path", default=str(_find_vault())
-        )
+        vault = typer.prompt("Vault path", default=str(_find_vault()))
     vault_path = Path(vault).expanduser()
 
     if not vault_path.exists():
@@ -263,7 +259,8 @@ def install(
     rel_ver = cortex_version()
     schema_ver = schema_version()
     mode = "DRY-RUN" if dry_run else "APPLY"
-    typer.echo(f"==> Cortex {'upgrade' if upgrade else 'install'} [{mode}] (v{rel_ver}, schema v{schema_ver})")
+    verb = "upgrade" if upgrade else "install"
+    typer.echo(f"==> Cortex {verb} [{mode}] (v{rel_ver}, schema v{schema_ver})")
     typer.echo(f"    vault: {vault_path}")
 
     # ---- Version guard (upgrade only) ----
@@ -410,8 +407,7 @@ def install(
             # Backup existing skill
             if skill_dest.exists():
                 _backup_file(skill_dest, manifest_dir)
-                _record_action(actions_file, "modified", str(skill_dest),
-                               f"cortex-ai.SKILL.md.bak")
+                _record_action(actions_file, "modified", str(skill_dest), "cortex-ai.SKILL.md.bak")
             else:
                 _record_action(actions_file, "created", str(skill_dest))
             skill_dest_dir.mkdir(parents=True, exist_ok=True)
@@ -443,8 +439,9 @@ def install(
 
     # ---- Write manifest ----
     if not dry_run:
-        _write_manifest(manifest_dir / "manifest.json", actions_file,
-                        str(vault_path), str(repo_root))
+        _write_manifest(
+            manifest_dir / "manifest.json", actions_file, str(vault_path), str(repo_root)
+        )
         # Clean up empty backup dir
         if manifest_dir.exists() and not any(
             f for f in manifest_dir.iterdir() if f.name != ".actions.jsonl"
@@ -458,10 +455,10 @@ def install(
         typer.echo("Upgrade complete. Restart your agent to load changes.")
     else:
         typer.echo("\nCortex is installed. Next steps:")
-        typer.echo(f"  cortex status         # verify the install")
-        typer.echo(f"  cortex version        # show version info")
-        typer.echo(f"  cortex import --dry-run  # import existing agent context")
-        typer.echo(f"  cortex distill        # run distillation manually")
+        typer.echo("  cortex status         # verify the install")
+        typer.echo("  cortex version        # show version info")
+        typer.echo("  cortex import --dry-run  # import existing agent context")
+        typer.echo("  cortex distill        # run distillation manually")
 
 
 # ---------------------------------------------------------------------------
@@ -482,7 +479,7 @@ def uninstall(
         "--latest",
         help="Undo only the most recent manifest",
     ),
-    backup: Optional[str] = typer.Option(
+    backup: str | None = typer.Option(
         None,
         "--backup",
         help="Undo a specific backup dir name",
@@ -517,21 +514,11 @@ def uninstall(
 
 @app.command()
 def distill(
-    dry_run: bool = typer.Option(
-        False, "--dry-run", help="Show changes without writing"
-    ),
-    list_notes: bool = typer.Option(
-        False, "--list", help="List all vault notes with tier/type"
-    ),
-    show_config: bool = typer.Option(
-        False, "--show-config", help="Print resolved paths as JSON"
-    ),
-    check: bool = typer.Option(
-        False, "--check", help="Report version/schema health and exit"
-    ),
-    graph: bool = typer.Option(
-        False, "--graph", help="Output wiki-link graph and exit"
-    ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show changes without writing"),
+    list_notes: bool = typer.Option(False, "--list", help="List all vault notes with tier/type"),
+    show_config: bool = typer.Option(False, "--show-config", help="Print resolved paths as JSON"),
+    check: bool = typer.Option(False, "--check", help="Report version/schema health and exit"),
+    graph: bool = typer.Option(False, "--graph", help="Output wiki-link graph and exit"),
     purge: bool = typer.Option(
         False,
         "--purge",
@@ -542,27 +529,17 @@ def distill(
         "--purge-apply",
         help="Delete drained log/session notes and rebuild",
     ),
-    hive_push: bool = typer.Option(
-        False, "--hive-push", help="Push vault notes to hub"
-    ),
-    hive_pull: bool = typer.Option(
-        False, "--hive-pull", help="Pull vault notes from hub"
-    ),
-    hive_status: bool = typer.Option(
-        False, "--hive-status", help="Show hive connection status"
-    ),
-    config_path: Optional[str] = typer.Option(
+    hive_push: bool = typer.Option(False, "--hive-push", help="Push vault notes to hub"),
+    hive_pull: bool = typer.Option(False, "--hive-pull", help="Pull vault notes from hub"),
+    hive_status: bool = typer.Option(False, "--hive-status", help="Show hive connection status"),
+    config_path: str | None = typer.Option(
         None,
         "--config",
         help="Path to cortex.yaml config file",
     ),
 ) -> None:
     """Run the vault-to-agent distillation process."""
-    cfg_path = (
-        Path(config_path)
-        if config_path
-        else Path.cwd() / "_sync" / "cortex.yaml"
-    )
+    cfg_path = Path(config_path) if config_path else Path.cwd() / "_sync" / "cortex.yaml"
     rc = run_distill(
         config_path=cfg_path,
         dry_run=dry_run,
@@ -586,7 +563,7 @@ def distill(
 
 @app.command()
 def status(
-    vault: Optional[str] = typer.Option(
+    vault: str | None = typer.Option(
         None,
         "--vault",
         help="Vault path (default: auto-detect from config discovery)",
@@ -631,26 +608,19 @@ def status(
                 elif schema == code_schema:
                     typer.echo("Schema:           compatible")
                 elif schema < code_schema:
-                    typer.echo(
-                        f"Schema:           migration pending "
-                        f"(v{schema} -> v{code_schema})"
-                    )
+                    typer.echo(f"Schema:           migration pending (v{schema} -> v{code_schema})")
                 else:
                     typer.echo(
-                        f"Schema:           ERROR — vault newer than code",
+                        "Schema:           ERROR — vault newer than code",
                         err=True,
                     )
             else:
                 typer.echo("Distilled memory: MISSING — run 'cortex distill'")
 
             # Check opencode config exists
-            opencode_cfg = (
-                Path.home() / ".config" / "opencode" / "opencode.jsonc"
-            )
+            opencode_cfg = Path.home() / ".config" / "opencode" / "opencode.jsonc"
             if not opencode_cfg.exists():
-                opencode_cfg = (
-                    Path.home() / ".config" / "opencode" / "opencode.json"
-                )
+                opencode_cfg = Path.home() / ".config" / "opencode" / "opencode.json"
             env_cfg = os.environ.get("OPENCODE_CONFIG")
             if env_cfg:
                 opencode_cfg = Path(env_cfg)
@@ -659,11 +629,14 @@ def status(
             else:
                 typer.echo("opencode config:  not found")
 
-            typer.echo("\nStatus:           HEALTHY" if vp.exists() and mem_json.exists()
-                       else "\nStatus:           NEEDS ATTENTION")
+            typer.echo(
+                "\nStatus:           HEALTHY"
+                if vp.exists() and mem_json.exists()
+                else "\nStatus:           NEEDS ATTENTION"
+            )
         except Exception as e:
             typer.echo(f"ERROR reading config: {e}", err=True)
-            raise typer.Exit(code=1)
+            raise typer.Exit(code=1) from None
     else:
         typer.echo("Config:           not found")
         typer.echo("\nCortex is not installed in this environment.")
@@ -678,7 +651,7 @@ def status(
 
 @app.command(name="import")
 def import_cmd(
-    vault: Optional[str] = typer.Option(
+    vault: str | None = typer.Option(
         None,
         "--vault",
         help="Vault root to import into (default: auto-detect)",
@@ -688,16 +661,10 @@ def import_cmd(
         "--dry-run",
         help="Show what would happen without writing anything",
     ),
-    agents_md: Optional[str] = typer.Option(
-        None, "--agents-md", help="Path to AGENTS.md"
-    ),
-    claude_md: Optional[str] = typer.Option(
-        None, "--claude-md", help="Path to CLAUDE.md"
-    ),
-    opencode: Optional[str] = typer.Option(
-        None, "--opencode", help="Path to opencode.jsonc"
-    ),
-    claude_memory: Optional[str] = typer.Option(
+    agents_md: str | None = typer.Option(None, "--agents-md", help="Path to AGENTS.md"),
+    claude_md: str | None = typer.Option(None, "--claude-md", help="Path to CLAUDE.md"),
+    opencode: str | None = typer.Option(None, "--opencode", help="Path to opencode.jsonc"),
+    claude_memory: str | None = typer.Option(
         None,
         "--claude-memory",
         help="Path to ~/.claude/memory directory",
@@ -744,12 +711,8 @@ def version() -> None:
 
 @memory_app.command()
 def search(
-    query: str = typer.Argument(
-        ..., help="Search query string"
-    ),
-    vault: Optional[str] = typer.Option(
-        None, "--vault", help="Vault path (auto-detect by default)"
-    ),
+    query: str = typer.Argument(..., help="Search query string"),
+    vault: str | None = typer.Option(None, "--vault", help="Vault path (auto-detect by default)"),
 ) -> None:
     """Search distilled memory from the CLI."""
     # Find memory.json
@@ -772,7 +735,7 @@ def search(
         data = json.loads(mem_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as e:
         typer.echo(f"ERROR: could not read memory.json: {e}", err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
     notes = data.get("notes", {})
     query_lower = query.lower()
@@ -803,39 +766,27 @@ def search(
         return
 
     typer.echo(f"Found {len(results)} result(s) for '{query}':\n")
-    for score, nid, note in results[:20]:
+    for _score, nid, note in results[:20]:
         alias = note.get("aliases", [""])[0]
         cat = note.get("category", "")
         snippet = note.get("content", "")[:80].replace("\n", " ")
-        typer.echo(
-            f"  {nid}  "
-            f"· {note.get('type', '?')}/{cat}  "
-            f"· {alias}"
-        )
+        typer.echo(f"  {nid}  · {note.get('type', '?')}/{cat}  · {alias}")
         if snippet:
             typer.echo(f"    {snippet}...")
 
 
 @memory_app.command()
 def write(
-    title: str = typer.Option(
-        ..., "--title", help="Note title (becomes alias and id)"
-    ),
+    title: str = typer.Option(..., "--title", help="Note title (becomes alias and id)"),
     note_type: str = typer.Option(
         ..., "--type", help="Note type (knowledge, entity, feedback, etc.)"
     ),
-    tier: str = typer.Option(
-        ..., "--tier", help="Tier (core, skill:<name>, project, vault-only)"
-    ),
-    tags: Optional[str] = typer.Option(
-        None, "--tags", help="Comma-separated tags"
-    ),
-    category: Optional[str] = typer.Option(
+    tier: str = typer.Option(..., "--tier", help="Tier (core, skill:<name>, project, vault-only)"),
+    tags: str | None = typer.Option(None, "--tags", help="Comma-separated tags"),
+    category: str | None = typer.Option(
         None, "--category", help="Category (patterns, api, projects, etc.)"
     ),
-    vault: Optional[str] = typer.Option(
-        None, "--vault", help="Vault path (auto-detect by default)"
-    ),
+    vault: str | None = typer.Option(None, "--vault", help="Vault path (auto-detect by default)"),
 ) -> None:
     """Write a metadata-only memory note to the vault."""
     # Find vault
@@ -859,11 +810,7 @@ def write(
 
     today = datetime.now().strftime("%Y-%m-%d")
 
-    tag_list = (
-        [t.strip() for t in tags.split(",") if t.strip()]
-        if tags
-        else []
-    )
+    tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
 
     # Determine type directory
     type_dir_name = note_type + ("s" if not note_type.endswith("s") else "")

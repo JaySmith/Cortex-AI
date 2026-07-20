@@ -9,6 +9,15 @@ dependencies = [
     "PyYAML>=6.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.5",
+    "mypy>=1.10",
+    "pytest>=8.0",
+    "pre-commit>=3.7",
+    "types-PyYAML>=6.0",
+]
+
 [project.scripts]
 cortex = "cortex.cli.main:main"
 
@@ -30,6 +39,15 @@ target-version = "py310"
 select = ["E", "F", "I", "B", "UP"]
 ignore = []
 
+[tool.ruff.lint.per-file-ignores]
+# Legacy self-bootstrapping scripts — import aliasing and post-bootstrap imports
+# are intentional patterns for venv detection. Deprecated shims have unused sys.
+"gen-portfolio.py" = ["E402", "F821", "E501"]
+"distill.py" = ["F401"]
+"cortex-import.py" = ["F401"]
+"cortex-uninstall.py" = ["F401", "E501"]
+"hive_client.py" = ["F401"]
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
@@ -48,7 +66,6 @@ module = [
     "cortex.distiller.core",
     "cortex.cli.commands.import_agent",
     "cortex.cli.commands.uninstall",
-    "cortex.mcp.upsert",
     "cortex.hub.client",
 ]
 ignore_errors = true

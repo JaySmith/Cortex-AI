@@ -21,4 +21,5 @@ def vault(tmp_path):
 def vault_notes(vault):
     """Scan the copied example-vault and return the note list."""
     from cortex.distiller.core import scan_vault
+
     return scan_vault(vault, skip_dirs={"templates"})

@@ -5,7 +5,6 @@ DEPRECATED: Use `cortex distill` instead (installed via `uv tool install .` or `
 This shim will be removed in a future release.
 """
 
-import sys
 import warnings
 
 warnings.warn(
@@ -16,4 +15,5 @@ warnings.warn(
 
 if __name__ == "__main__":
     from cortex.distiller.core import main
+
     main()

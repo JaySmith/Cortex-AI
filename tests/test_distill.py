@@ -1,32 +1,29 @@
 """Tests for distiller — pure functions and VaultNote model."""
 
 import json
-import sys
-from pathlib import Path
 
 import pytest
 
 from cortex.distiller.core import (
     VaultNote,
-    parse_frontmatter,
-    strip_wiki_links,
-    strip_leading_h1,
-    strip_related_section,
-    validate_target_config,
     excluded,
-    hive_eligible,
     find_drained_notes,
+    hive_eligible,
     load_config,
+    parse_frontmatter,
     read_vault_schema,
     scan_vault,
+    strip_leading_h1,
+    strip_related_section,
+    strip_wiki_links,
+    validate_target_config,
     write_file,
-    PURGEABLE_TYPES,
 )
-
 
 # ---------------------------------------------------------------------------
 # parse_frontmatter
 # ---------------------------------------------------------------------------
+
 
 class TestParseFrontmatter:
     def test_valid_frontmatter(self):
@@ -85,6 +82,7 @@ class TestParseFrontmatter:
 # strip_wiki_links
 # ---------------------------------------------------------------------------
 
+
 class TestStripWikiLinks:
     def test_simple_link(self):
         assert strip_wiki_links("See [[page]] for details.") == "See page for details."
@@ -118,6 +116,7 @@ class TestStripWikiLinks:
 # strip_leading_h1
 # ---------------------------------------------------------------------------
 
+
 class TestStripLeadingH1:
     def test_strips_h1(self):
         text = "# Title\n\nBody content."
@@ -149,6 +148,7 @@ class TestStripLeadingH1:
 # strip_related_section
 # ---------------------------------------------------------------------------
 
+
 class TestStripRelatedSection:
     def test_strips_trailing_related(self):
         text = "Body content.\n\n## Related\n- [[note1]]\n- [[note2]]"
@@ -175,6 +175,7 @@ class TestStripRelatedSection:
 # ---------------------------------------------------------------------------
 # VaultNote
 # ---------------------------------------------------------------------------
+
 
 class TestVaultNote:
     @pytest.fixture
@@ -287,6 +288,7 @@ class TestVaultNote:
 # validate_target_config
 # ---------------------------------------------------------------------------
 
+
 class TestValidateTargetConfig:
     def test_all_keys_present(self):
         assert validate_target_config("test", {"a": 1, "b": 2}, ["a", "b"]) is True
@@ -301,6 +303,7 @@ class TestValidateTargetConfig:
 # ---------------------------------------------------------------------------
 # excluded
 # ---------------------------------------------------------------------------
+
 
 class TestExcluded:
     def test_vault_only_type(self, tmp_path):
@@ -327,6 +330,7 @@ class TestExcluded:
 # ---------------------------------------------------------------------------
 # hive_eligible
 # ---------------------------------------------------------------------------
+
 
 class TestHiveEligible:
     def _note(self, tmp_path, tier, hive_override=None):
@@ -376,6 +380,7 @@ class TestHiveEligible:
 # find_drained_notes
 # ---------------------------------------------------------------------------
 
+
 class TestFindDrainedNotes:
     def test_finds_drained_session(self, tmp_path):
         p = tmp_path / "drained.md"
@@ -406,13 +411,11 @@ class TestFindDrainedNotes:
 # load_config
 # ---------------------------------------------------------------------------
 
+
 class TestLoadConfig:
     def test_valid_config(self, tmp_path):
         cfg_file = tmp_path / "cortex.yaml"
-        cfg_file.write_text(
-            "vault_path: /tmp/vault\n"
-            "eager_tiers:\n  - core\n"
-        )
+        cfg_file.write_text("vault_path: /tmp/vault\neager_tiers:\n  - core\n")
         cfg = load_config(cfg_file)
         assert cfg["vault_path"] == "/tmp/vault"
         assert cfg["eager_tiers"] == ["core"]
@@ -423,8 +426,7 @@ class TestLoadConfig:
     def test_config_with_hive_block(self, tmp_path):
         cfg_file = tmp_path / "cortex.yaml"
         cfg_file.write_text(
-            "vault_path: /tmp/vault\n"
-            "hive:\n  enabled: true\n  machine_id: test-1\n"
+            "vault_path: /tmp/vault\nhive:\n  enabled: true\n  machine_id: test-1\n"
         )
         cfg = load_config(cfg_file)
         assert cfg["hive"]["enabled"] is True
@@ -437,13 +439,12 @@ class TestLoadConfig:
 # read_vault_schema
 # ---------------------------------------------------------------------------
 
+
 class TestReadVaultSchema:
     def test_valid_memory_json(self, tmp_path):
         sync_dir = tmp_path / "_sync" / "distilled"
         sync_dir.mkdir(parents=True)
-        (sync_dir / "memory.json").write_text(
-            json.dumps({"_meta": {"schema_version": 2}})
-        )
+        (sync_dir / "memory.json").write_text(json.dumps({"_meta": {"schema_version": 2}}))
         assert read_vault_schema(tmp_path) == 2
 
     def test_missing_memory_json(self, tmp_path):
@@ -465,6 +466,7 @@ class TestReadVaultSchema:
 # ---------------------------------------------------------------------------
 # scan_vault (integration with example-vault fixture)
 # ---------------------------------------------------------------------------
+
 
 class TestScanVault:
     def test_finds_all_typed_notes(self, vault_notes):
@@ -504,6 +506,7 @@ class TestScanVault:
 # ---------------------------------------------------------------------------
 # write_file
 # ---------------------------------------------------------------------------
+
 
 class TestWriteFile:
     def test_writes_new_file(self, tmp_path):

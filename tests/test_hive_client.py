@@ -9,10 +9,10 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from hive_client import HubClient, HubConnectionError
 
-
 # ---------------------------------------------------------------------------
 # _parse_sse (static method — pure text parsing)
 # ---------------------------------------------------------------------------
+
 
 class TestParseSse:
     def test_single_data_line(self):
@@ -61,6 +61,7 @@ class TestParseSse:
 # HubClient construction
 # ---------------------------------------------------------------------------
 
+
 class TestHubClientInit:
     def test_strips_trailing_slash(self):
         client = HubClient("http://example.com/mcp/")
@@ -84,6 +85,7 @@ class TestHubClientInit:
 # ---------------------------------------------------------------------------
 # _headers
 # ---------------------------------------------------------------------------
+
 
 class TestHeaders:
     def test_base_headers(self):
@@ -115,6 +117,7 @@ class TestHeaders:
 # ---------------------------------------------------------------------------
 # _reconnect_and_retry limits
 # ---------------------------------------------------------------------------
+
 
 class TestReconnectRetry:
     def test_raises_after_max_retries(self):

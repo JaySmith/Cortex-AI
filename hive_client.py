@@ -5,7 +5,6 @@ DEPRECATED: Use `from cortex.hub.client import HubClient` instead.
 This shim will be removed in a future release.
 """
 
-import sys
 import warnings
 
 warnings.warn(

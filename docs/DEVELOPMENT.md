@@ -114,16 +114,55 @@ Override locations with `VAULT_ROOT`, `SKILLS_DIR` env vars;
 
 ## Running the tests
 
-The pytest suite lives in `tests/` and needs `pytest` (declared in
-`requirements-dev.txt`, not the runtime `requirements.txt`):
+The pytest suite lives in `tests/` and needs dev dependencies:
 
 ```bash
-.venv/bin/pip install -r requirements-dev.txt   # once
-.venv/bin/python -m pytest                       # run all
+.venv/bin/pip install -e ".[dev]"            # once
+.venv/bin/python -m pytest                    # run all
 ```
 
 `conftest.py` copies `example-vault/` into a tmp dir per test, so tests never
 touch your real vault.
+
+## Quality checks
+
+All quality tools are installed via `pip install -e ".[dev]"`. Run them before
+every commit:
+
+```bash
+ruff check .              # lint
+ruff format --check .     # format check
+mypy cortex/cli cortex/config  # type check (new modules only)
+pytest                     # tests
+```
+
+Fix auto-fixable lint/format issues:
+
+```bash
+ruff check --fix .        # auto-fix lint
+ruff format .             # auto-format
+```
+
+### Pre-commit hooks
+
+Install hooks once so they run automatically on every `git commit`:
+
+```bash
+.venv/bin/pre-commit install
+```
+
+Hooks run ruff (lint + format) and basic file checks (trailing whitespace,
+valid YAML/TOML/JSON). To run manually against all files:
+
+```bash
+.venv/bin/pre-commit run --all-files
+```
+
+### CI
+
+GitHub Actions runs on every push/PR to `main` (`.github/workflows/ci.yml`):
+ruff check, ruff format, mypy, and pytest. PRs that break any of these will
+fail CI.
 
 ## Cutting a release
 

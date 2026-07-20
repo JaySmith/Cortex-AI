@@ -27,7 +27,8 @@ Output: <vault>/PORTFOLIO.md  (or --output to override)
 # an infinite loop. If no venv exists we fall through and let the yaml
 # ImportError below fire naturally. Cross-platform: Windows uses
 # .venv/Scripts/python.exe, POSIX uses .venv/bin/python.
-import sys as _sys, os as _os
+import os as _os
+import sys as _sys
 from pathlib import Path as _Path
 
 
@@ -55,17 +56,17 @@ _reexec_with_venv()
 del _reexec_with_venv, _sys, _os, _Path
 # --- end venv bootstrap ---------------------------------------------------
 
+import argparse
 import base64
+import json
 import os
 import re
 import ssl
 import sys
-import json
-import argparse
-import urllib.request
 import urllib.parse
-from pathlib import Path
+import urllib.request
 from datetime import datetime
+from pathlib import Path
 
 try:
     import yaml
@@ -76,6 +77,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Vault path detection
 # ---------------------------------------------------------------------------
+
 
 def get_vault_path() -> Path:
     """Return vault path from env or infer from script location (<vault>/_sync/)."""
@@ -89,6 +91,7 @@ def get_vault_path() -> Path:
 # Frontmatter + section parsing
 # ---------------------------------------------------------------------------
 
+
 def parse_note(path: Path) -> tuple[dict, str]:
     text = path.read_text(encoding="utf-8")
     meta: dict = {}
@@ -100,7 +103,7 @@ def parse_note(path: Path) -> tuple[dict, str]:
                 meta = yaml.safe_load(text[3:end]) or {}
             except yaml.YAMLError:
                 meta = {}
-            body = text[end + 4:]
+            body = text[end + 4 :]
     return meta, body
 
 
@@ -124,6 +127,7 @@ def title_of(meta: dict, path: Path) -> str:
 # ---------------------------------------------------------------------------
 # Jira
 # ---------------------------------------------------------------------------
+
 
 def jira_creds() -> tuple[str | None, str | None]:
     """Try to read Jira credentials from ~/.claude/.mcp.json."""
@@ -159,6 +163,7 @@ def jira_status(key: str, jira_base: str, user: str, token: str) -> str:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     ap = argparse.ArgumentParser(
         description="Generate a phase-grouped portfolio from Cortex project notes"
@@ -168,7 +173,9 @@ def main() -> None:
         "--jira-base",
         help="Jira base URL, e.g. https://company.atlassian.net (required unless --no-jira)",
     )
-    ap.add_argument("--vault", help="Vault root path (auto-detected if this script is in <vault>/_sync/)")
+    ap.add_argument(
+        "--vault", help="Vault root path (auto-detected if this script is in <vault>/_sync/)"
+    )
     ap.add_argument(
         "--projects-dir",
         default="entities/projects",
@@ -207,18 +214,20 @@ def main() -> None:
         meta, body = parse_note(md)
         if meta.get("tier") != "project":
             continue
-        note_id = (meta.get("id") or md.stem)
+        note_id = meta.get("id") or md.stem
         if note_id in skip_ids:
             continue
-        projects.append({
-            "path": md,
-            "title": title_of(meta, md),
-            "phase": (meta.get("phase") or "unphased").lower(),
-            "jira_epic": (meta.get("jira_epic") or "").strip(),
-            "personal": bool(meta.get("personal")),
-            "goals": extract_section(body, "Goals"),
-            "roadmap": extract_section(body, "Roadmap"),
-        })
+        projects.append(
+            {
+                "path": md,
+                "title": title_of(meta, md),
+                "phase": (meta.get("phase") or "unphased").lower(),
+                "jira_epic": (meta.get("jira_epic") or "").strip(),
+                "personal": bool(meta.get("personal")),
+                "goals": extract_section(body, "Goals"),
+                "roadmap": extract_section(body, "Roadmap"),
+            }
+        )
 
     user = token = None
     if not args.no_jira:
@@ -284,7 +293,9 @@ def main() -> None:
             lines.append(f"### {p['title']}")
             if p["jira_epic"] and args.jira_base:
                 live = f" — live: **{p['status']}**" if p["status"] else ""
-                lines.append(f"_Jira: [{p['jira_epic']}]({args.jira_base}/browse/{p['jira_epic']}){live}_")
+                lines.append(
+                    f"_Jira: [{p['jira_epic']}]({args.jira_base}/browse/{p['jira_epic']}){live}_"
+                )
             lines.append("")
             lines.append("**Goals**")
             lines.append("")
@@ -296,21 +307,26 @@ def main() -> None:
             lines.append("")
 
     phase_block(
-        "Discovery", by_phase.get("discovery", []),
+        "Discovery",
+        by_phase.get("discovery", []),
         "Reviewing, defining, and proving solution + value before committing to build.",
     )
     phase_block(
-        "Delivery", by_phase.get("delivery", []),
+        "Delivery",
+        by_phase.get("delivery", []),
         "Actively building and shipping the value defined in Discovery.",
     )
     phase_block(
-        "Completed", by_phase.get("completed", []),
+        "Completed",
+        by_phase.get("completed", []),
         "Delivered/closed projects.",
     )
 
     extra = by_phase.get("unphased", [])
     if extra:
-        phase_block("Unphased", extra, "Projects missing a `phase` frontmatter field — classify them.")
+        phase_block(
+            "Unphased", extra, "Projects missing a `phase` frontmatter field — classify them."
+        )
 
     out.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
     print(

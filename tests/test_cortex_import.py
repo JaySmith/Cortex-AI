@@ -1,24 +1,20 @@
 """Tests for cortex import — pure helpers and import logic."""
 
 import json
-import sys
-from pathlib import Path
-
-import pytest
 
 from cortex.cli.commands.import_agent import (
+    backup_file,
+    build_note,
+    first_existing,
     slugify,
     strip_jsonc,
-    build_note,
     write_note,
-    backup_file,
-    first_existing,
 )
-
 
 # ---------------------------------------------------------------------------
 # slugify
 # ---------------------------------------------------------------------------
+
 
 class TestSlugify:
     def test_simple(self):
@@ -46,6 +42,7 @@ class TestSlugify:
 # ---------------------------------------------------------------------------
 # strip_jsonc
 # ---------------------------------------------------------------------------
+
 
 class TestStripJsonc:
     def test_line_comment(self):
@@ -85,6 +82,7 @@ class TestStripJsonc:
 # build_note
 # ---------------------------------------------------------------------------
 
+
 class TestBuildNote:
     def test_output_format(self):
         result = build_note("my-id", "My Title", "/path/to/file", "Note body.\n")
@@ -105,6 +103,7 @@ class TestBuildNote:
 # ---------------------------------------------------------------------------
 # write_note
 # ---------------------------------------------------------------------------
+
 
 class TestWriteNote:
     def test_writes_file(self, tmp_path):
@@ -134,6 +133,7 @@ class TestWriteNote:
 # ---------------------------------------------------------------------------
 # backup_file
 # ---------------------------------------------------------------------------
+
 
 class TestBackupFile:
     def test_backs_up(self, tmp_path):
@@ -177,6 +177,7 @@ class TestBackupFile:
 # ---------------------------------------------------------------------------
 # first_existing
 # ---------------------------------------------------------------------------
+
 
 class TestFirstExisting:
     def test_finds_first(self, tmp_path):

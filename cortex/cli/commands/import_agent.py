@@ -25,11 +25,9 @@ import argparse
 import json
 import re
 import shutil
-import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -107,9 +105,7 @@ def build_note(note_id: str, title: str, origin: str, body: str) -> str:
     return "\n".join(fm) + body.strip() + "\n"
 
 
-def write_note(
-    dest_dir: Path, note_id: str, content: str, dry: bool, taken: set[str]
-) -> Path:
+def write_note(dest_dir: Path, note_id: str, content: str, dry: bool, taken: set[str]) -> Path:
     # de-dupe ids within a single run
     base = note_id
     n = 2
@@ -132,9 +128,7 @@ def write_note(
 # ---------------------------------------------------------------------------
 
 
-def backup_file(
-    src: Path, backup_dir: Path, dry: bool, actions: list | None = None
-) -> None:
+def backup_file(src: Path, backup_dir: Path, dry: bool, actions: list | None = None) -> None:
     if not src.exists():
         return
     dst = backup_dir / src.name
@@ -207,9 +201,7 @@ def import_opencode_instructions(
         body = ref_path.read_text(encoding="utf-8")
         note_id = slugify(f"imported-instructions-{ref_path.stem}")
         title = f"Imported instructions: {ref_path.name}"
-        write_note(
-            dest, note_id, build_note(note_id, title, str(ref_path), body), dry, taken
-        )
+        write_note(dest, note_id, build_note(note_id, title, str(ref_path), body), dry, taken)
         count += 1
     return count
 
@@ -231,9 +223,7 @@ def import_claude_memory(
         body = md.read_text(encoding="utf-8")
         note_id = slugify(f"imported-memory-{md.stem}")
         title = f"Imported memory: {md.stem}"
-        write_note(
-            dest, note_id, build_note(note_id, title, str(md), body), dry, taken
-        )
+        write_note(dest, note_id, build_note(note_id, title, str(md), body), dry, taken)
         count += 1
     return count
 
@@ -260,19 +250,13 @@ def run_import(
 
     defaults = default_locations()
     agents_md_path = (
-        Path(agents_md).expanduser()
-        if agents_md
-        else first_existing(defaults["agents_md"])
+        Path(agents_md).expanduser() if agents_md else first_existing(defaults["agents_md"])
     )
     claude_md_path = (
-        Path(claude_md).expanduser()
-        if claude_md
-        else first_existing(defaults["claude_md"])
+        Path(claude_md).expanduser() if claude_md else first_existing(defaults["claude_md"])
     )
     opencode_path = (
-        Path(opencode).expanduser()
-        if opencode
-        else first_existing(defaults["opencode"])
+        Path(opencode).expanduser() if opencode else first_existing(defaults["opencode"])
     )
     claude_mem_path = (
         Path(claude_memory).expanduser()
@@ -304,14 +288,10 @@ def run_import(
     )
 
     print("-- opencode instructions")
-    total += import_opencode_instructions(
-        opencode_path, dest, backup_dir, dry_run, taken, actions
-    )
+    total += import_opencode_instructions(opencode_path, dest, backup_dir, dry_run, taken, actions)
 
     print("-- Claude memory")
-    total += import_claude_memory(
-        claude_mem_path, dest, backup_dir, dry_run, taken, actions
-    )
+    total += import_claude_memory(claude_mem_path, dest, backup_dir, dry_run, taken, actions)
 
     if actions and not dry_run:
         backup_dir.mkdir(parents=True, exist_ok=True)
@@ -321,21 +301,15 @@ def run_import(
             "vault_root": str(vault),
             "actions": actions,
         }
-        (backup_dir / "manifest.json").write_text(
-            json.dumps(manifest, indent=2), encoding="utf-8"
-        )
+        (backup_dir / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
         print(f"  import manifest -> {backup_dir / 'manifest.json'}")
 
     print()
     print(f"Imported {total} note(s) into {dest}")
     if total and not dry_run:
         print("Next steps:")
-        print(
-            "  1. Review notes tagged 'review' in {dest} and adjust type/tier."
-        )
-        print(
-            f"  2. Re-distill:  cortex distill --config {vault / '_sync' / 'cortex.yaml'}"
-        )
+        print("  1. Review notes tagged 'review' in {dest} and adjust type/tier.")
+        print(f"  2. Re-distill:  cortex distill --config {vault / '_sync' / 'cortex.yaml'}")
 
     return total
 
@@ -348,9 +322,7 @@ def run_import(
 def main() -> None:
     repo = Path(__file__).resolve().parent.parent.parent
     ap = argparse.ArgumentParser(
-        description=(
-            "Backup existing agent config and import it into a Cortex vault."
-        )
+        description=("Backup existing agent config and import it into a Cortex vault.")
     )
     ap.add_argument(
         "--vault",
@@ -362,15 +334,9 @@ def main() -> None:
         action="store_true",
         help="Show what would happen without writing anything",
     )
-    ap.add_argument(
-        "--agents-md", help="Path to AGENTS.md (default: auto-detect)"
-    )
-    ap.add_argument(
-        "--claude-md", help="Path to CLAUDE.md (default: auto-detect)"
-    )
-    ap.add_argument(
-        "--opencode", help="Path to opencode.jsonc (default: auto-detect)"
-    )
+    ap.add_argument("--agents-md", help="Path to AGENTS.md (default: auto-detect)")
+    ap.add_argument("--claude-md", help="Path to CLAUDE.md (default: auto-detect)")
+    ap.add_argument("--opencode", help="Path to opencode.jsonc (default: auto-detect)")
     ap.add_argument(
         "--claude-memory",
         help="Path to ~/.claude/memory dir (default: auto-detect)",
