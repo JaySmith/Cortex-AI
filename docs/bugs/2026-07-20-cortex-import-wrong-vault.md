@@ -1,6 +1,6 @@
 # Bug Fix Brief: `cortex import` writes to the wrong vault
 
-- **Status:** Open
+- **Status:** Fixed in commit <commit-sha>
 - **Reported:** 2026-07-20
 - **Affected version:** 1.4.0
 - **Component:** `cortex import` CLI command

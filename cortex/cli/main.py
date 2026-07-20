@@ -706,19 +706,16 @@ def import_cmd(
         "--claude-memory",
         help="Path to ~/.claude/memory directory",
     ),
-) -> None:
+    ) -> None:
     """Import existing agent context into the Cortex vault."""
-    # Auto-detect vault if not provided
-    if not vault:
-        for p in [Path.cwd(), Path.home() / "Cortex"]:
-            cfg = p / "_sync" / "cortex.yaml"
-            if cfg.exists():
-                vault = str(p)
-                break
-        if not vault:
-            vault = str(Path.cwd())
+    vault_path = Path(vault).expanduser() if vault else _find_vault()
+    if not (vault_path / "_sync" / "cortex.yaml").exists():
+        what = f"  Vault path: {vault_path}"
+        why = "That directory does not contain a Cortex vault (_sync/cortex.yaml missing)."
+        fix = "Pass --vault to point at your real vault, or run 'cortex install' first."
+        _error(what, why, fix)
+        raise typer.Exit(code=1)
 
-    vault_path = Path(vault).expanduser()
     import_agent_module.run_import(
         vault=vault_path,
         dry_run=dry_run,
