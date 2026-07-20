@@ -4,7 +4,7 @@ Direction for future Cortex releases. This is a planning document, not a
 commitment — items move, merge, and drop as priorities shift. Shipped work is
 recorded in [`CHANGELOG.md`](./CHANGELOG.md); this file is only for what's ahead.
 
-Current release: **1.4.0** (see `cortex/__init__.py`).
+Current release: **2.0.0** (see `cortex/__init__.py`).
 
 ---
 
@@ -12,47 +12,100 @@ Current release: **1.4.0** (see `cortex/__init__.py`).
 
 Multiple agents on multiple machines share a centralized vault of long-term
 knowledge via cortex-hub. cortex-ai is the brain; cortex-hub is the nervous
-system. The agent talks to a local MCP server over stdio (unchanged). The local
-server optionally federates to a shared hub over HTTP.
+system. The agent talks to the Python CLI over subprocess (unchanged). The CLI
+optionally federates to a shared hub over HTTP.
 
 **Full design and implementation plan:**
 [`docs/HIVE-INTEGRATION.md`](docs/HIVE-INTEGRATION.md)
 
 **Summary:** Python hub client in `cortex/encoder/core.py`, new `hive:` config block,
 `--hive-push` / `--hive-pull` / `--hive-status` CLI commands, `hive`
-frontmatter field on notes, optional MCP server proxy for real-time sync.
-Newest `updated` timestamp wins for conflict resolution (v1). Bearer token
-auth and section-aware merge deferred to later phases.
+frontmatter field on notes. Newest `updated` timestamp wins for conflict
+resolution (v1). Bearer token auth and section-aware merge deferred to later
+phases.
 
-**Release impact:** MINOR (1.3.0). Schema bump v1→v2. No new hub tools —
-uses existing `hub_memory_*` API. No changes to cortex-hub.
+**Release impact:** MINOR (1.3.0). Schema bump v1→v2.
 
-**Status:** Phases 1–6 implemented and committed. Phase 7 (bearer auth) deferred.
+**Status:** Phases 1–7 implemented and committed.
 - Phase 1: Config + schema migration ✅
 - Phase 2: Python hub client (`cortex/hub/client.py`) ✅
 - Phase 3: CLI commands (`--hive-push/pull/status`) ✅
 - Phase 4: Hive frontmatter (`VaultNote.hive`) ✅
-- ~~Phase 5: MCP server hive proxy (`hub-client.ts`)~~ (removed in v2.0.0)
+- Phase 5: MCP server hive proxy — removed in v2.0.0 (MCP server removed) 🗑️
 - Phase 6: Skill commands (`cortex hive status/push/pull/setup`) ✅
-- Phase 7: Bearer token auth (cortex-hub side) ⏳
+- Phase 7: Bearer token auth (cortex-hub side) ✅
 
 ---
 
-## Ongoing — cross-platform parity (Windows / Linux / macOS)
+## Shipped — vault lint (`cortex lint`)
 
-Cortex should run identically on all three platforms.
+A CLI lint command that scans the vault for common issues. 11 rules across three
+severity levels, auto-fix for the most common ones, `--strict` mode, `--json`
+output, `--note <id>` single-note scanning.
 
-- **Done (1.4.0):** Multi-agent platform support (OpenCode/Codex/Copilot installers),
-  `cortex init` templates, `cortex upgrade`, enhanced `cortex doctor`, structured
-  error messages, ruff/mypy/pre-commit/CI.
-- **Remaining:**
-  - Cross-platform venv handling for `cortex bootstrap` and `cortex install` on Windows.
-  - Audit any remaining POSIX assumptions in shell tooling.
-  - Verify the MCP server's `fireEncode` venv resolution on Windows end-to-end.
+| Severity | Rules | Auto-fix |
+|----------|-------|:--------:|
+| E | missing-id, missing-type, missing-tier, invalid-tier, duplicate-id | type & tier ✓ |
+| W | missing-aliases, slug-mismatch, dangling-wiki-link, non-slug-id | aliases ✓ |
+| I | missing-updated, empty-body | |
+
+**Implementation:** `cortex/cli/lint.py`, `cortex/vault/links.py` (shared link
+resolution with encoder), registered in `cortex/cli/main.py`. 21 tests.
+
+**Shipped in:** v2.0.0
 
 ---
 
-## Someday — enhanced retrieval (only if keyword proves insufficient)
+## Shipped — vault relationship graph (`cortex encode --graph`)
+
+`cortex encode --graph` parses `[[wiki-link]]` references across all note bodies
+and exports a directed graph to `encoded/graph.json`:
+
+- **Nodes** — every note with its type, category, and degree
+- **Edges** — resolved link pairs (source → target via id or alias)
+- **Dangling** — links to note ids that don't exist
+- **Isolated** — nodes with zero inbound or outbound links
+- **God nodes** — high-degree notes (central to the vault; > median + 2σ)
+
+**Implementation:** `build_wiki_graph()` in `cortex/encoder/core.py`, shared
+link resolution in `cortex/vault/links.py`.
+
+**Shipped in:** v1.4.0
+
+---
+
+## Shipped — CLI memory commands
+
+The MCP server was removed in v2.0.0. All memory operations are now CLI commands:
+
+| Command | What it does |
+|---------|-------------|
+| `cortex memory get <id>` | Fetch a single note by id (memory.json, fallback to file) |
+| `cortex memory list` | Table of all notes with `--tier`/`--type` filters |
+| `cortex memory write` | Create or update a note, auto-triggers encode |
+| `cortex memory search <query>` | Keyword search across memory.json |
+
+**Shipped in:** v2.0.0 (breaking)
+
+---
+
+## Shipped — cross-platform parity (Windows / Linux / macOS)
+
+Cortex runs on all three platforms.
+
+- Multi-agent platform support (OpenCode/Codex/Copilot installers)
+- `cortex init` templates
+- `cortex upgrade`
+- Enhanced `cortex doctor` with structured error messages
+- Cross-platform venv resolution in `_resolve_encode_python()` and `cortex bootstrap`
+- ruff/mypy/pre-commit/CI
+
+**Remaining:**
+- Verify the fire-encode subprocess path works on Windows end-to-end after `uv tool install`.
+
+---
+
+## Future — enhanced retrieval (only if keyword proves insufficient)
 
 The keyword scorer handles canonical queries well. Cortex's curated vocabulary
 (human-chosen ids, aliases, and tags that agents are trained to use) partially
@@ -62,7 +115,7 @@ If synonym or conceptual-proximity failures are observed in practice — searchi
 for something, getting no results, and knowing the note exists — a vector sidecar
 (`encoded/embeddings.json`) could be added: embeddings generated at encode
 time, stored outside the vault, invisible to Obsidian. Human readability of all
-vault `.md` files is fully preserved. The MCP `memory_search` would use
+vault `.md` files is fully preserved. The CLI `memory search` would use
 keyword-first, vector-fallback. No speed gain — this is an accuracy improvement
 for vocabulary mismatch only, and only worthwhile if the failure mode is observed
 repeatedly in practice.
@@ -72,7 +125,7 @@ repeatedly in practice.
 
 ---
 
-## Someday — multi-platform agent routing (`agents:` field)
+## Future — multi-platform agent routing (`agents:` field)
 
 The `agents:` frontmatter field is already parsed by `cortex/encoder/core.py` (as
 `VaultNote.agents`) but not yet used for routing. Today Cortex serves one agent
@@ -90,10 +143,10 @@ vault.
 
 ---
 
-## Someday — temporal fact lifecycle (`expires_at`)
+## Future — temporal fact lifecycle (`expires_at`)
 
 A note could carry `expires_at: "YYYY-MM-DD"` frontmatter. `cortex encode` would
-skip expired notes at encoding time; `memory_search` would filter them at
+skip expired notes at encoding time; `memory search` would filter them at
 retrieval time. Useful for temporary context: sprint-specific notes, meeting
 prep, short-lived project state that should not persist indefinitely.
 
@@ -103,31 +156,6 @@ temporary and set this field at write time.
 
 No implementation until the need arises — manual curation via the `vault-only`
 tier and note deletion is sufficient for now.
-
----
-
-## Someday — vault relationship graph (`cortex encode --graph`)
-
-Obsidian `[[wiki-link]]` references in note bodies are invisible to the encoder
-today — they're just text. A `--graph` command could parse them into a directed
-graph (source note → linked note) and export insight artifacts:
-
-- `encoded/graph.json` — queryable edge list
-- `encoded/graph.html` — interactive visualization (pan / zoom / search)
-- **Dangling links** — a note links to an id that doesn't exist yet
-- **Isolated nodes** — notes with zero inbound or outbound links
-- **God nodes** — high-degree notes central to the vault
-
-**Benefit:** structural insight for maintaining and navigating the vault. See
-which notes are foundational (high-degree → candidates for tier promotion), spot
-orphaned notes that should link somewhere, and catch dangling references. Inspired
-by Graphify's "god nodes" and graph export, but scoped to wiki-link parsing over
-Markdown — no Tree-sitter, no LLM extraction, no community-detection stack
-(overkill for a few dozen curated notes). A ~150-line Python addition using
-NetworkX, fitting cleanly into the existing encoder ecosystem.
-
-No implementation until vault navigation becomes a felt need; `cortex list` and
-`memory_related` cover most cases at current scale.
 
 ---
 
