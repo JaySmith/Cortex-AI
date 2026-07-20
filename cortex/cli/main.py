@@ -67,6 +67,13 @@ for _pname in ("opencode", "codex", "copilot"):
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
+def _error(what: str, why: str, fix: str) -> None:
+    """Print a structured error message."""
+    typer.echo(f"\n  What failed:\n    {what}\n", err=True)
+    typer.echo(f"  Why it matters:\n    {why}\n", err=True)
+    typer.echo(f"  Suggested fix:\n    {fix}\n", err=True)
+
+
 def _find_vault() -> Path:
     """Try to find an existing vault from common locations."""
     candidates = [
@@ -152,7 +159,11 @@ def bootstrap(
 
     # Check python3
     if not shutil.which("python3"):
-        typer.echo("ERROR: python3 not found on PATH.", err=True)
+        _error(
+            "python3 not found on PATH",
+            "Cortex requires Python 3.10+ to create a venv and run the distiller.",
+            "Install Python 3.10+ and ensure 'python3' is on your PATH.",
+        )
         raise typer.Exit(code=1)
 
     # Create venv
@@ -242,7 +253,11 @@ def install(
     vault_path = Path(vault).expanduser()
 
     if not vault_path.exists():
-        typer.echo(f"ERROR: vault path does not exist: {vault_path}", err=True)
+        _error(
+            f"Vault path does not exist: {vault_path}",
+            "The vault directory must exist before Cortex can install into it.",
+            f"Create the directory first: mkdir -p {vault_path}",
+        )
         raise typer.Exit(code=1)
 
     vault_path = vault_path.resolve()
@@ -275,10 +290,10 @@ def install(
     if upgrade:
         live_schema = read_vault_schema(vault_path)
         if live_schema is not None and live_schema > schema_ver:
-            typer.echo(
-                f"ERROR: live vault schema (v{live_schema}) is NEWER than this "
-                f"code (v{schema_ver}). Refusing to downgrade.",
-                err=True,
+            _error(
+                f"Live vault schema (v{live_schema}) is NEWER than this code (v{schema_ver})",
+                "Downgrading the schema would risk data loss in your vault.",
+                "Update Cortex code to at least v{live_schema}, or back up and recreate the vault.",
             )
             raise typer.Exit(code=1)
 
@@ -643,12 +658,19 @@ def status(
                 else "\nStatus:           NEEDS ATTENTION"
             )
         except Exception as e:
-            typer.echo(f"ERROR reading config: {e}", err=True)
+            _error(
+                f"Could not read config: {e}",
+                "The config file is present but unreadable, so Cortex cannot "
+                "locate the vault or validate the installation.",
+                "Check file permissions and ensure cortex.yaml is valid YAML.",
+            )
             raise typer.Exit(code=1) from None
     else:
-        typer.echo("Config:           not found")
-        typer.echo("\nCortex is not installed in this environment.")
-        typer.echo("Run 'cortex install' to get started.")
+        _error(
+            "Config not found",
+            "Cortex needs a cortex.yaml config to locate the vault and run distillation.",
+            "Run 'cortex install' to set up Cortex.",
+        )
         raise typer.Exit(code=1)
 
 
@@ -713,6 +735,63 @@ def version() -> None:
 
 
 # ---------------------------------------------------------------------------
+# init
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def init(
+    vault: str | None = typer.Argument(
+        None,
+        help="Vault path (default: current directory)",
+    ),
+    template: str | None = typer.Option(
+        None,
+        "--template",
+        "-t",
+        help="Starter template (personal, engineering, product-management, knowledge-base)",
+    ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview without writing"),
+) -> None:
+    """Initialize a new Cortex vault with starter notes."""
+    from cortex.templates._render import TEMPLATES, apply_template, list_templates
+
+    vault_path = Path(vault) if vault else Path.cwd()
+
+    if template is None:
+        typer.echo("Available templates:\n")
+        for name, desc in list_templates().items():
+            typer.echo(f"  {name:24s} {desc}")
+        typer.echo(f"\nUsage: cortex init --template <name> {vault_path}")
+        return
+
+    if template not in TEMPLATES:
+        _error(
+            f"Unknown template: {template!r}",
+            f"Available templates: {', '.join(TEMPLATES)}",
+            "Run 'cortex init' to see available templates.",
+        )
+        raise typer.Exit(code=1)
+
+    mode = "DRY-RUN" if dry_run else "APPLY"
+    typer.echo(f"==> Cortex init [{mode}] (template: {template})")
+    typer.echo(f"    vault: {vault_path}\n")
+
+    created = apply_template(vault_path, template, dry_run=dry_run)
+
+    if not created:
+        typer.echo("  No files created (all already exist).")
+    else:
+        for rel in created:
+            typer.echo(f"  Created: {rel}")
+        typer.echo(f"\n  {len(created)} file(s) created.")
+
+    typer.echo("\nNext steps:")
+    typer.echo(f"  1. Review and customize the notes in {vault_path}")
+    typer.echo(f"  2. Run 'cortex install {vault_path}' to set up Cortex")
+
+
+# ---------------------------------------------------------------------------
 # memory subcommands
 # ---------------------------------------------------------------------------
 
@@ -736,13 +815,21 @@ def search(
                 break
 
     if not mem_path or not mem_path.exists():
-        typer.echo("ERROR: memory.json not found. Run 'cortex distill' first.", err=True)
+        _error(
+            "memory.json not found",
+            "The distilled memory index is required to search notes.",
+            "Run 'cortex distill' to generate memory.json from your vault notes.",
+        )
         raise typer.Exit(code=1)
 
     try:
         data = json.loads(mem_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as e:
-        typer.echo(f"ERROR: could not read memory.json: {e}", err=True)
+        _error(
+            f"Could not read memory.json: {e}",
+            "The memory index file exists but is unreadable or contains invalid JSON.",
+            "Run 'cortex distill' to regenerate memory.json.",
+        )
         raise typer.Exit(code=1) from e
 
     notes = data.get("notes", {})
@@ -809,7 +896,11 @@ def write(
                 break
 
     if not vault_path or not vault_path.exists():
-        typer.echo("ERROR: vault not found. Run 'cortex install' first.", err=True)
+        _error(
+            "Vault not found",
+            "A vault directory is required to write notes into.",
+            "Run 'cortex install' first, or pass --vault to specify the vault path.",
+        )
         raise typer.Exit(code=1)
 
     note_id = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
@@ -827,7 +918,11 @@ def write(
 
     note_path = target_dir / f"{note_id}.md"
     if note_path.exists():
-        typer.echo(f"ERROR: note already exists at {note_path}", err=True)
+        _error(
+            f"Note already exists at {note_path}",
+            "Overwriting an existing note would lose its current content.",
+            "Use a different --title, or manually delete the existing note first.",
+        )
         raise typer.Exit(code=1)
 
     parts = [
@@ -956,25 +1051,94 @@ def doctor(
     vault_path = Path(vault) if vault else _find_vault()
     typer.echo("Cortex doctor\n")
 
-    # Core checks
-    typer.echo("Core")
-    config_path = vault_path / "_sync" / "cortex.yaml"
-    mem_json = vault_path / "_sync" / "distilled" / "memory.json"
-    skill_file = Path.home() / ".config" / "opencode" / "skills" / "cortex-ai" / "SKILL.md"
-
-    checks = [
-        ("Config found", config_path.exists()),
-        ("Vault found", vault_path.exists()),
-        ("Distilled memory found", mem_json.exists()),
-        ("Skill installed", skill_file.exists()),
-    ]
     all_healthy = True
-    for label, ok in checks:
-        typer.echo(f"  {'✓' if ok else '✗'} {label}")
-        if not ok:
-            all_healthy = False
 
-    # Platform checks
+    # ---- Core section ----
+    typer.echo("Core")
+
+    # Python version
+    py_ver = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    py_ok = sys.version_info >= (3, 10)
+    typer.echo(f"  {'✓' if py_ok else '✗'} Python {py_ver} (>= 3.10)")
+    if not py_ok:
+        all_healthy = False
+
+    # Config
+    config_path = vault_path / "_sync" / "cortex.yaml"
+    cfg_ok = config_path.exists()
+    typer.echo(f"  {'✓' if cfg_ok else '✗'} Config found at {config_path}")
+    if not cfg_ok:
+        typer.echo("    Suggested fix: Run 'cortex install' to set up Cortex")
+        all_healthy = False
+
+    # Vault writable
+    vault_ok = vault_path.exists() and os.access(vault_path, os.W_OK)
+    vault_label = "writable" if vault_ok else "not writable"
+    typer.echo(f"  {'✓' if vault_ok else '✗'} Vault {vault_label} at {vault_path}")
+    if not vault_ok:
+        typer.echo("    Suggested fix: Ensure the vault directory exists and is writable")
+        all_healthy = False
+
+    # Schema compatibility
+    if cfg_ok:
+        live_schema = read_vault_schema(vault_path)
+        code_schema = schema_version()
+        if live_schema is None:
+            typer.echo("  ✓ Schema v? (fresh vault, no prior schema)")
+        elif live_schema == code_schema:
+            typer.echo(f"  ✓ Schema v{live_schema} (compatible)")
+        elif live_schema < code_schema:
+            typer.echo(f"  ⚠ Schema v{live_schema} (migration pending → v{code_schema})")
+        else:
+            typer.echo(f"  ✗ Schema v{live_schema} > code v{code_schema} (vault newer than code)")
+            all_healthy = False
+    else:
+        typer.echo("  ○ Schema (skipped — config not found)")
+
+    # Distilled memory
+    mem_json = vault_path / "_sync" / "distilled" / "memory.json"
+    if mem_json.exists():
+        # Check freshness
+        mtime = mem_json.stat().st_mtime
+        age_seconds = datetime.now().timestamp() - mtime
+        age_days = age_seconds / 86400
+        if age_days < 1:
+            age_str = f"{int(age_seconds / 3600)}h ago"
+        elif age_days < 2:
+            age_str = "1 day ago"
+        else:
+            age_str = f"{int(age_days)} days ago"
+        fresh = age_days <= 7
+        mem_label = "current" if fresh else "stale"
+        typer.echo(f"  {'✓' if fresh else '⚠'} Distilled memory {mem_label} (distilled {age_str})")
+        if not fresh:
+            typer.echo("    Suggested fix: Run 'cortex distill' to refresh memory")
+    else:
+        typer.echo("  ✗ Distilled memory not found")
+        typer.echo("    Suggested fix: Run 'cortex distill'")
+        all_healthy = False
+
+    # Memory file validity
+    if mem_json.exists():
+        try:
+            data = json.loads(mem_json.read_text(encoding="utf-8"))
+            note_count = len(data.get("notes", {}))
+            typer.echo(f"  ✓ Memory file valid ({note_count} notes)")
+        except (OSError, json.JSONDecodeError) as e:
+            typer.echo(f"  ✗ Memory file invalid: {e}")
+            typer.echo("    Suggested fix: Run 'cortex distill' to regenerate")
+            all_healthy = False
+    else:
+        typer.echo("  ○ Memory file (skipped — distilled memory not found)")
+
+    # Skill installed
+    skill_file = Path.home() / ".config" / "opencode" / "skills" / "cortex-ai" / "SKILL.md"
+    skill_ok = skill_file.exists()
+    typer.echo(f"  {'✓' if skill_ok else '✗'} Skill installed")
+    if not skill_ok:
+        typer.echo("    Suggested fix: Run 'cortex install' to install the skill")
+
+    # ---- Platform section ----
     platforms_to_check = list_platforms()
     if platform:
         inst = get_installer(platform)
@@ -987,19 +1151,106 @@ def doctor(
     for inst in platforms_to_check:
         typer.echo(f"\n{inst.platform_name.title()}")
         detected = inst.detect()
-        typer.echo(f"  {'✓' if detected else '○'} Detected: {'yes' if detected else 'no'}")
+        typer.echo(f"  {'✓' if detected else '○'} Detected")
         if detected:
             ctx = _build_context(vault)
             errors = inst.validate(ctx)
-            for e in errors:
-                typer.echo(f"  ✗ {e}")
+            if errors:
+                for err in errors:
+                    typer.echo(f"  ✗ {err}")
                 all_healthy = False
-            if not errors:
-                typer.echo("  ✓ Config OK")
+            else:
+                typer.echo("  ✓ Skill installed")
 
+    # ---- Summary ----
     typer.echo(f"\nStatus: {'HEALTHY' if all_healthy else 'NEEDS ATTENTION'}")
     if not all_healthy:
-        typer.echo("Run 'cortex <platform> install' to fix platform issues.")
+        typer.echo("Run 'cortex install' to fix issues.")
+
+
+# ---------------------------------------------------------------------------
+# cortex upgrade
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def upgrade(
+    vault: str | None = typer.Option(None, "--vault", help="Vault path override"),
+    apply: bool = typer.Option(False, "--apply", help="Apply changes (default is preview)"),
+) -> None:
+    """Re-distill memory and refresh Cortex assets.
+
+    Default is dry-run (preview only). Pass --apply to make changes.
+    """
+    vault_path = Path(vault) if vault else _find_vault()
+    sync_dir = vault_path / "_sync"
+    config_file = sync_dir / "cortex.yaml"
+
+    if not vault_path.exists():
+        _error(
+            f"Vault path does not exist: {vault_path}",
+            "Cannot upgrade without a valid vault directory.",
+            "Run 'cortex install' to set up a new vault.",
+        )
+        raise typer.Exit(code=1)
+
+    if not config_file.exists():
+        _error(
+            f"Config not found at {config_file}",
+            "Cannot upgrade without a cortex.yaml config.",
+            "Run 'cortex install' to create the config.",
+        )
+        raise typer.Exit(code=1)
+
+    # Schema check
+    live_schema = read_vault_schema(vault_path)
+    code_schema = schema_version()
+    schema_changed = live_schema is not None and live_schema != code_schema
+
+    # Backup directory
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    backup_dir = sync_dir / "backups" / f"{stamp}-upgrade"
+
+    typer.echo(f"Cortex upgrade{' preview' if not apply else ''}\n".rstrip())
+
+    # Backup
+    if not apply:
+        typer.echo(f"  Would backup: {sync_dir}")
+    else:
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        # Backup the distilled directory and config
+        for fname in ["cortex.yaml", "distill.py", "VERSION", "SCHEMA_VERSION"]:
+            _backup_file(sync_dir / fname, backup_dir)
+        distilled = sync_dir / "distilled"
+        if distilled.exists():
+            for item in distilled.iterdir():
+                _backup_file(item, backup_dir / "distilled")
+        typer.echo(f"  Backed up: {backup_dir}")
+
+    # Schema
+    if live_schema is None:
+        typer.echo("  Schema: unknown (fresh vault)")
+    elif schema_changed:
+        typer.echo(f"  Schema: {live_schema} -> {code_schema} (change detected)")
+        typer.echo("  Warning: automated migration is not supported. See docs/migration.md.")
+    else:
+        typer.echo(f"  Schema: {code_schema} (unchanged)")
+
+    # Re-distill
+    if not apply:
+        typer.echo("  Would re-distill memory")
+    else:
+        rc = run_distill(config_path=config_file)
+        if rc != 0:
+            typer.echo("  WARNING: distill had errors", err=True)
+        else:
+            typer.echo("  Re-distilled memory")
+
+    typer.echo("")
+    if not apply:
+        typer.echo("Run 'cortex upgrade --apply' to apply changes.")
+    else:
+        typer.echo("Upgrade complete. Restart your agent to load changes.")
 
 
 # ---------------------------------------------------------------------------
