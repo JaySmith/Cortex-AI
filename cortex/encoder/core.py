@@ -37,6 +37,7 @@ from pathlib import Path
 import yaml
 
 from cortex.hub.client import HubClient, HubConnectionError
+from cortex.vault.links import extract_wiki_links, resolve_wiki_links, strip_wiki_links
 
 # ---------------------------------------------------------------------------
 # Versioning
@@ -213,16 +214,7 @@ def parse_frontmatter(content: str) -> tuple[dict, str]:
     return meta, body
 
 
-def strip_wiki_links(text: str) -> str:
-    text = re.sub(r"\[\[([^\]|]+)\|([^\]]+)\]\]", r"\2", text)
-    text = re.sub(r"\[\[([^\]]+)\]\]", r"\1", text)
-    return text
-
-
-def extract_wiki_links(text: str) -> list[str]:
-    """Extract target ids from [[wiki-link]] syntax in a note body."""
-    links = re.findall(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]", text)
-    return links
+# strip_wiki_links and extract_wiki_links are now in cortex.vault.links
 
 
 def strip_leading_h1(text: str) -> str:
@@ -331,8 +323,24 @@ class VaultNote:
         return d
 
 
-def scan_vault(vault_path: Path, skip_dirs: set[str] | None = None) -> list[VaultNote]:
-    """Scan vault_path recursively, returning all notes that have a 'type' field."""
+def scan_vault(
+    vault_path: Path,
+    skip_dirs: set[str] | None = None,
+    *,
+    require_type: bool = True,
+) -> list[VaultNote]:
+    """Scan vault_path recursively, returning all notes.
+
+    Parameters
+    ----------
+    vault_path : Path
+        Root of the vault.
+    skip_dirs : set[str] | None
+        Directory names to skip entirely (default: ``{"templates"}``).
+    require_type : bool
+        If True (default), skip any file without a ``type`` frontmatter field.
+        Set to False for linting, so notes missing ``type`` can be detected.
+    """
     if skip_dirs is None:
         skip_dirs = {"templates"}
 
@@ -352,14 +360,15 @@ def scan_vault(vault_path: Path, skip_dirs: set[str] | None = None) -> list[Vaul
             print(f"  WARNING: Could not read {md}: {e}")
             continue
         meta, body = parse_frontmatter(content)
-        if not meta.get("type"):
+        if require_type and not meta.get("type"):
             continue
         note = VaultNote(md, meta, body)
         if note.name in seen_ids:
             print(
                 f"  WARNING: duplicate id '{note.name}' in {note.path} "
                 f"(first seen at {seen_ids[note.name]}) — both kept, "
-                "last write wins in dict targets"
+                "last write wins in dict targets",
+                file=sys.stderr,
             )
         else:
             seen_ids[note.name] = note.path
@@ -379,42 +388,16 @@ def excluded(note: VaultNote, exclude_tags: set[str], vault_only_types: set[str]
 
 
 def build_wiki_graph(notes: list[VaultNote]) -> dict:
-    """Parse [[wiki-links]] from all note bodies into a directed graph."""
-    id_set = {n.name for n in notes}
-    id_aliases: dict[str, str] = {}
-    for n in notes:
-        for alias in n.aliases:
-            id_aliases[alias.lower()] = n.name
+    """Parse [[wiki-links]] from all note bodies into a directed graph with analytics."""
+    edges, dangling = resolve_wiki_links(notes)
 
-    edges: list[dict] = []
-    dangling: list[dict] = []
+    id_set = {n.name for n in notes}
     out_degree: dict[str, int] = {n.name: 0 for n in notes}
     in_degree: dict[str, int] = {n.name: 0 for n in notes}
 
-    for n in notes:
-        raw_links = extract_wiki_links(n.body)
-        seen_targets: set[str] = set()
-        for target in raw_links:
-            resolved = target
-            if target not in id_set:
-                resolved = id_aliases.get(target.lower(), "")
-            if not resolved:
-                lower_target = target.lower()
-                for nid in id_set:
-                    if nid.lower() == lower_target:
-                        resolved = nid
-                        break
-            if not resolved:
-                dangling.append({"note": n.name, "target": target})
-                continue
-            if resolved == n.name:
-                continue
-            if resolved in seen_targets:
-                continue
-            seen_targets.add(resolved)
-            edges.append({"source": n.name, "target": resolved})
-            out_degree[n.name] = out_degree.get(n.name, 0) + 1
-            in_degree[resolved] = in_degree.get(resolved, 0) + 1
+    for e in edges:
+        out_degree[e["source"]] = out_degree.get(e["source"], 0) + 1
+        in_degree[e["target"]] = in_degree.get(e["target"], 0) + 1
 
     total_degree = {}
     for nid in id_set:

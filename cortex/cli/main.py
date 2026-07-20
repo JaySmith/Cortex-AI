@@ -32,6 +32,7 @@ import typer
 
 from cortex.cli.commands import import_agent as import_agent_module
 from cortex.cli.commands import uninstall as uninstall_cmd
+from cortex.cli.lint import lint_app
 from cortex.encoder.core import (
     cortex_version,
     load_config,
@@ -51,6 +52,7 @@ memory_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(memory_app, name="memory")
+app.add_typer(lint_app, name="lint")
 
 # Platform subcommands — one Typer per platform
 platform_apps: dict[str, typer.Typer] = {}
