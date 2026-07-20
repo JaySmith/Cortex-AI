@@ -93,28 +93,50 @@ cortex uninstall --vault <vault> --latest --apply  # revert
 ## [Unreleased]
 
 ### Added
-- **`cortex-mcp-upsert.py` — jsonc-aware MCP config upsert.** `setup.sh` and
-  `deploy.sh` previously wrote the `cortex` MCP entry only to
-  `~/.config/opencode/opencode.json`, silently skipping users whose config lives
-  in `opencode.jsonc` (or at a custom `$OPENCODE_CONFIG` path). Both scripts now
-  call a shared helper that resolves the active config
-  (`$OPENCODE_CONFIG` > `opencode.jsonc` > `opencode.json` > create) and performs
-  a **comment-preserving surgical edit** of just the `mcp.cortex` block, so
-  `.jsonc` comments survive. The helper writes all four env vars
-  (`MEMORY_JSON`, `VAULT_ROOT`, `DISTILL_SCRIPT`, `DISTILL_PYTHON`) and is
-  idempotent. `deploy.sh` now also ships the helper into the live distiller dir.
-  Additive — no schema bump.
-- **Unit tests for the MCP upsert** (`tests/test_mcp_upsert.py`, 24 cases) covering
-  config resolution, comment-preserving edits, and empty-object handling.
-- **`requirements-dev.txt`** declaring `pytest` (previously undeclared — had to be
+- `requirements-dev.txt` declaring `pytest` (previously undeclared — had to be
   installed by hand to run the suite). See `docs/DEVELOPMENT.md` → Running the tests.
 
 ### Fixed
-- **Trailing-comma bug in the MCP upsert** when inserting into an empty `{}` or
-  `"mcp": {}` object (would emit invalid `{...},}`). Caught by the new tests.
-- **`test_skips_underscore_dirs`** failed on a fresh checkout because
+- `test_skips_underscore_dirs` failed on a fresh checkout because
   `example-vault/` now ships a `_sync/` dir; the test's `mkdir` now passes
   `exist_ok=True`.
+
+## [2.0.0] — 2026-07-20
+
+### Breaking
+- **MCP server removed** (`mcp/cortex/`). All memory operations migrated to CLI
+  commands. The `cortex` Typer app is now the sole entry point. Agents that
+  previously used `cortex_memory_*` MCP tools must switch to `cortex memory *`
+  CLI commands. See `docs/cli-reference.md` for the full command reference.
+- **`cortex sync` replaced by individual `cortex memory *` commands.** The old
+  sync-then-encode loop is now explicit: `cortex memory write` → auto-encode.
+
+### Added
+- **`cortex memory get <id>`** — fetch a single note by id (memory.json first,
+  then vault file fallback).
+- **`cortex memory list`** — table of all notes with `--tier`/`--type` filters.
+- **`cortex memory write`** — create or update notes with auto-encode trigger.
+- **`cortex memory search <query>`** — keyword search across memory.json.
+- **`cortex lint`** — vault linting with 11 rules across three severity levels.
+  Supports `--strict`, `--fix`, `--note <id>`, `--json`, `--rules`.
+- **`cortex.vault` subpackage** — shared link parsing primitives
+  (`extract_wiki_links`, `strip_wiki_links`, `resolve_wiki_links`) used by
+  both the encoder and the lint command.
+- **`scan_vault(require_type=False)`** parameter for linting untyped notes.
+- **16 tests for CLI memory commands** in `tests/test_memory_cli.py`.
+- **21 tests for cortex lint** in `tests/test_lint.py`.
+
+### Changed
+- `build_wiki_graph` now delegates link resolution to
+  `cortex.vault.links.resolve_wiki_links`, removing ~25 lines of duplicate logic.
+- `scan_vault` duplicate warnings now write to stderr instead of stdout.
+- `cortex import` uses `_find_vault()` (shared helper) instead of its own inline
+  hardcoded-path detection, fixing a bug where non-`~/Cortex` vaults were missed.
+
+### Fixed
+- `cortex import` no longer silently writes to the wrong directory when the vault
+  is named something other than `Cortex` (e.g. `cortex-ai`). Now errors with a
+  clear message if no vault is found.
 
 ## [1.4.0] — 2026-07-13
 
