@@ -3,20 +3,22 @@
 cortex.cli.main — Typer CLI entry point for the `cortex` command.
 
 All user-facing operations consolidated behind a single CLI:
-  cortex install          Bootstrap Cortex for a user
+  cortex bootstrap       Create venv + install Python deps
+  cortex install         Bootstrap or upgrade Cortex for a user
   cortex install --upgrade Upgrade an existing install
-  cortex uninstall        Revert Cortex-installed assets
-  cortex distill          Run vault-to-agent distillation
-  cortex status           Show basic health of Cortex
-  cortex memory search    Search distilled memory
-  cortex memory write     Write a memory note (metadata-only in Phase 1)
-  cortex import           Import existing agent context
-  cortex version          Print version information
+  cortex uninstall       Revert Cortex-installed assets
+  cortex distill         Run vault-to-agent distillation
+  cortex status          Show basic health of Cortex
+  cortex memory search   Search distilled memory
+  cortex memory write    Write a memory note (metadata-only in Phase 1)
+  cortex import          Import existing agent context
+  cortex version         Print version information
 """
 
 from __future__ import annotations
 
 import os
+import re
 import sys
 import json
 import shutil
@@ -52,8 +54,10 @@ app.add_typer(memory_app, name="memory")
 
 
 # ---------------------------------------------------------------------------
-# install
+# helpers
 # ---------------------------------------------------------------------------
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def _find_vault() -> Path:
@@ -69,6 +73,134 @@ def _find_vault() -> Path:
     return Path.cwd()
 
 
+def _backup_file(src: Path, backup_dir: Path) -> Path | None:
+    """Snapshot a file into backup_dir. Returns the backup path, or None if
+    the source didn't exist."""
+    if not src.exists():
+        return None
+    flat = str(src).replace(str(Path.home()), "~").replace("/", "_").lstrip("_")
+    dst = backup_dir / flat
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, dst)
+    return dst
+
+
+def _record_action(actions_file: Path, op: str, path: str, saved_as: str = "") -> None:
+    entry = {"op": op, "path": path}
+    if saved_as:
+        entry["saved_as"] = saved_as
+    with open(actions_file, "a") as f:
+        f.write(json.dumps(entry) + "\n")
+
+
+def _write_manifest(
+    manifest_path: Path,
+    actions_file: Path,
+    vault_root: str,
+    repo_root: str,
+) -> None:
+    actions = []
+    if actions_file.exists():
+        for line in actions_file.read_text().splitlines():
+            line = line.strip()
+            if line:
+                actions.append(json.loads(line))
+        actions_file.unlink()
+    if not actions:
+        manifest_path.parent.rmdir() if not any(manifest_path.parent.iterdir()) else None
+        return
+    doc = {
+        "cortex_version": cortex_version(),
+        "schema_version": schema_version(),
+        "created": datetime.now().isoformat(),
+        "vault_root": vault_root,
+        "repo_root": repo_root,
+        "actions": actions,
+    }
+    manifest_path.write_text(json.dumps(doc, indent=2), encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# bootstrap
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def bootstrap(
+    repo_root: Optional[str] = typer.Argument(
+        None,
+        help="Repo root (default: auto-detect)",
+    ),
+) -> None:
+    """Create a venv and install Python dependencies.
+
+    This is the chicken-and-egg command: run it before `cortex install` if you
+    don't have a venv yet. Safe to re-run (idempotent).
+    """
+    root = Path(repo_root) if repo_root else _REPO_ROOT
+    venv_dir = root / ".venv"
+
+    typer.echo("==> Cortex bootstrap")
+    typer.echo(f"    repo: {root}")
+
+    # Check python3
+    if not shutil.which("python3"):
+        typer.echo("ERROR: python3 not found on PATH.", err=True)
+        raise typer.Exit(code=1)
+
+    # Create venv
+    if not venv_dir.exists():
+        typer.echo("    creating venv ...")
+        subprocess.run([sys.executable, "-m", "venv", str(venv_dir)], check=True)
+    else:
+        typer.echo("    venv already exists")
+
+    python = venv_dir / "bin" / "python"
+
+    # Upgrade pip
+    typer.echo("    upgrading pip ...")
+    subprocess.run(
+        [str(python), "-m", "pip", "install", "--quiet", "--upgrade", "pip"],
+        check=True,
+    )
+
+    # Install deps
+    req = root / "requirements.txt"
+    if req.exists():
+        typer.echo("    installing dependencies ...")
+        subprocess.run(
+            [str(python), "-m", "pip", "install", "--quiet", "-r", str(req)],
+            check=True,
+        )
+    else:
+        typer.echo("    installing package ...")
+        subprocess.run(
+            [str(python), "-m", "pip", "install", "--quiet", "-e", str(root)],
+            check=True,
+        )
+
+    typer.echo(f"\nBootstrap complete. Activate with:")
+    typer.echo(f"  source {venv_dir}/bin/activate")
+    typer.echo(f"  cortex install")
+
+
+# ---------------------------------------------------------------------------
+# install
+# ---------------------------------------------------------------------------
+
+# Files the distiller needs in vault/_sync/
+_DISTILLER_FILES = [
+    "distill.py",
+    "hive_client.py",
+    "cortex-import.py",
+    "cortex-uninstall.py",
+    "gen-portfolio.py",
+    "VERSION",
+    "SCHEMA_VERSION",
+    "CHANGELOG.md",
+]
+
+
 @app.command()
 def install(
     vault: Optional[str] = typer.Argument(
@@ -78,7 +210,7 @@ def install(
     upgrade: bool = typer.Option(
         False,
         "--upgrade",
-        help="Upgrade an existing install (replaces deploy.sh)",
+        help="Upgrade an existing install",
     ),
     no_distill: bool = typer.Option(
         False,
@@ -91,8 +223,13 @@ def install(
         help="Show what would change without writing anything",
     ),
 ) -> None:
-    """Bootstrap or upgrade Cortex for a user."""
-    repo_root = Path(__file__).resolve().parent.parent.parent
+    """Bootstrap or upgrade Cortex for a user.
+
+    Handles everything: venv deps, config generation, distiller deployment,
+    skill installation, backup, and distillation. Replaces setup.sh and
+    deploy.sh.
+    """
+    repo_root = _REPO_ROOT
 
     if not vault:
         vault = typer.prompt(
@@ -105,22 +242,32 @@ def install(
         raise typer.Exit(code=1)
 
     vault_path = vault_path.resolve()
-    distilled_dir = vault_path / "_sync" / "distilled"
+    sync_dir = vault_path / "_sync"
+    distilled_dir = sync_dir / "distilled"
     skills_dir = distilled_dir / "skills"
     memory_json = distilled_dir / "memory.json"
     core_context = distilled_dir / "opencode" / "core-context.md"
     projects_dir = distilled_dir / "opencode" / "projects"
-    config_file = vault_path / "_sync" / "cortex.yaml"
-    mcp_home = Path.home() / ".config" / "opencode" / "mcp" / "cortex"
+    config_file = sync_dir / "cortex.yaml"
     opencode_skills_dir = Path.home() / ".config" / "opencode" / "skills"
+
+    # Install manifest — records everything this run creates/modifies so
+    # `cortex uninstall` can cleanly revert.
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    manifest_dir = sync_dir / "backups" / f"{stamp}-{'upgrade' if upgrade else 'install'}"
+    actions_file = manifest_dir / ".actions.jsonl"
+    if not dry_run:
+        manifest_dir.mkdir(parents=True, exist_ok=True)
+        actions_file.write_text("")
 
     rel_ver = cortex_version()
     schema_ver = schema_version()
-    typer.echo(f"==> Cortex {'upgrade' if upgrade else 'install'} (v{rel_ver}, schema v{schema_ver})")
+    mode = "DRY-RUN" if dry_run else "APPLY"
+    typer.echo(f"==> Cortex {'upgrade' if upgrade else 'install'} [{mode}] (v{rel_ver}, schema v{schema_ver})")
     typer.echo(f"    vault: {vault_path}")
 
+    # ---- Version guard (upgrade only) ----
     if upgrade:
-        # Guard: refuse to deploy older code over a newer live vault
         live_schema = read_vault_schema(vault_path)
         if live_schema is not None and live_schema > schema_ver:
             typer.echo(
@@ -130,19 +277,58 @@ def install(
             )
             raise typer.Exit(code=1)
 
-    # Determine python to use
     python = sys.executable
 
-    # ---- Generate cortex.yaml (only if missing) ----
-    typer.echo("\n==> [1/6] Config")
-    config_file.parent.mkdir(parents=True, exist_ok=True)
+    # ---- [1/5] Ensure venv deps ----
+    typer.echo("\n==> [1/5] Dependencies")
+    venv_dir = repo_root / ".venv"
+    venv_python = venv_dir / "bin" / "python"
+    if venv_python.exists():
+        typer.echo("    venv deps already installed")
+    elif not dry_run:
+        typer.echo("    venv not found — run 'cortex bootstrap' first, or")
+        typer.echo("    installing deps inline ...")
+        subprocess.run([python, "-m", "venv", str(venv_dir)], check=True)
+        subprocess.run(
+            [str(venv_python), "-m", "pip", "install", "--quiet", "--upgrade", "pip"],
+            check=True,
+        )
+        req = repo_root / "requirements.txt"
+        if req.exists():
+            subprocess.run(
+                [str(venv_python), "-m", "pip", "install", "--quiet", "-r", str(req)],
+                check=True,
+            )
+        typer.echo("    deps installed into .venv")
+    else:
+        typer.echo("    [DRY] would create venv and install deps")
+
+    # ---- [2/5] Deploy distiller ----
+    typer.echo("\n==> [2/5] Distiller")
+    if upgrade:
+        # Backup existing distiller files before overwriting
+        if not dry_run:
+            for fname in _DISTILLER_FILES:
+                src = sync_dir / fname
+                _backup_file(src, manifest_dir)
+        typer.echo(f"    deploying distiller -> {sync_dir}")
+    else:
+        typer.echo(f"    distiller -> {sync_dir}")
+
+    if not dry_run:
+        for fname in _DISTILLER_FILES:
+            src = repo_root / fname
+            if src.exists():
+                dst = sync_dir / fname
+                shutil.copy2(src, dst)
+                _record_action(actions_file, "created", str(dst))
+
+    # ---- [3/5] Config (only if missing) ----
+    typer.echo("\n==> [3/5] Config")
+    sync_dir.mkdir(parents=True, exist_ok=True)
     if config_file.exists():
         typer.echo(f"    {config_file} already exists — leaving it untouched")
     else:
-        core_context_str = str(core_context)
-        skills_dir_str = str(skills_dir)
-        projects_dir_str = str(projects_dir)
-        memory_json_str = str(memory_json)
         yaml_content = (
             f"# Cortex — generated by cortex install\n"
             f"# Points at: {vault_path}\n"
@@ -168,23 +354,23 @@ def install(
             f"  core_context:\n"
             f"    enabled: true\n"
             f"    type: core-context\n"
-            f'    output_file: "{core_context_str}"\n'
+            f'    output_file: "{core_context}"\n'
             f"\n"
             f"  skills:\n"
             f"    enabled: true\n"
             f"    type: skill-embed\n"
-            f'    skills_dir: "{skills_dir_str}"\n'
+            f'    skills_dir: "{skills_dir}"\n'
             f'    embed_filename: "reference.md"\n'
             f"\n"
             f"  projects:\n"
             f"    enabled: true\n"
             f"    type: project-context\n"
-            f'    output_dir: "{projects_dir_str}"\n'
+            f'    output_dir: "{projects_dir}"\n'
             f"\n"
             f"  python-agents:\n"
             f"    enabled: true\n"
             f"    type: json\n"
-            f'    output_file: "{memory_json_str}"\n'
+            f'    output_file: "{memory_json}"\n'
             f"    include_types:\n"
             f"      - knowledge\n"
             f"      - entity\n"
@@ -195,87 +381,39 @@ def install(
             typer.echo(f"    [DRY] would create {config_file}")
         else:
             config_file.write_text(yaml_content, encoding="utf-8")
+            _record_action(actions_file, "created", str(config_file))
             typer.echo(f"    wrote {config_file}")
 
-    # ---- Deploy MCP server ----
-    typer.echo("\n==> [2/6] MCP server")
-    built_mcp = repo_root / "mcp" / "cortex" / "build"
-    if dry_run:
-        typer.echo(f"    [DRY] would copy {built_mcp} -> {mcp_home / 'build'}")
-        typer.echo(f"    [DRY] would copy package.json -> {mcp_home}")
-    else:
-        mcp_home.mkdir(parents=True, exist_ok=True)
-        if built_mcp.exists():
-            shutil.copytree(
-                built_mcp, mcp_home / "build", dirs_exist_ok=True
-            )
-            typer.echo(f"    deployed MCP build -> {mcp_home / 'build'}")
-        else:
-            typer.echo(
-                f"    WARNING: MCP not built at {built_mcp} — skipping",
-                err=True,
-            )
-        pkg_json = repo_root / "mcp" / "cortex" / "package.json"
-        if pkg_json.exists():
-            shutil.copy2(pkg_json, mcp_home / "package.json")
-        ver_file = repo_root / "VERSION"
-        if ver_file.exists():
-            shutil.copy2(ver_file, mcp_home / "VERSION")
-        schema_file = repo_root / "SCHEMA_VERSION"
-        if schema_file.exists():
-            shutil.copy2(schema_file, mcp_home / "SCHEMA_VERSION")
-        # npm install in mcp_home for production deps
-        try:
-            subprocess.run(
-                ["npm", "install", "--silent"],
-                cwd=mcp_home,
-                capture_output=True,
-                timeout=60,
-            )
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            typer.echo(
-                "    WARNING: npm install failed in MCP home (non-fatal)",
-                err=True,
-            )
-
-    # ---- Pre-create skill dirs + first distill ----
-    typer.echo("\n==> [3/6] First distill")
+    # ---- [4/5] Skill + first distill ----
+    typer.echo("\n==> [4/5] Skill + distill")
     if not dry_run:
-        # Ensure skill dirs exist
-        if vault_path.exists():
-            for md in vault_path.rglob("*.md"):
-                if any(
-                    p.startswith((".", "_"))
-                    for p in md.relative_to(vault_path).parts
-                ):
-                    continue
-                import re
-                m = re.search(
-                    r"^tier:\s*skill:(\S+)",
-                    md.read_text(encoding="utf-8"),
-                    re.M,
-                )
-                if m:
-                    (skills_dir / m.group(1)).mkdir(parents=True, exist_ok=True)
-        # Run distill
-        if config_file.exists():
-            rc = run_distill(config_path=config_file)
-            if rc != 0:
-                typer.echo("    WARNING: distill had errors", err=True)
-    else:
-        typer.echo("    [DRY] would pre-create skill dirs and run distill")
+        # Pre-create skill dirs
+        for md in vault_path.rglob("*.md"):
+            if any(p.startswith((".", "_")) for p in md.relative_to(vault_path).parts):
+                continue
+            try:
+                text = md.read_text(encoding="utf-8")
+            except Exception:
+                continue
+            m = re.search(r"^tier:\s*skill:(\S+)", text, re.M)
+            if m:
+                (skills_dir / m.group(1)).mkdir(parents=True, exist_ok=True)
 
-    # ---- Install the cortex-ai skill ----
-    typer.echo("\n==> [4/6] Skill + opencode config")
+    # Install skill
     skill_src = repo_root / "skills" / "cortex-ai" / "SKILL.md"
     if skill_src.exists():
         skill_dest_dir = opencode_skills_dir / "cortex-ai"
         skill_dest = skill_dest_dir / "SKILL.md"
         if dry_run:
-            typer.echo(
-                f"    [DRY] would install skill -> {skill_dest}"
-            )
+            typer.echo(f"    [DRY] would install skill -> {skill_dest}")
         else:
+            # Backup existing skill
+            if skill_dest.exists():
+                _backup_file(skill_dest, manifest_dir)
+                _record_action(actions_file, "modified", str(skill_dest),
+                               f"cortex-ai.SKILL.md.bak")
+            else:
+                _record_action(actions_file, "created", str(skill_dest))
             skill_dest_dir.mkdir(parents=True, exist_ok=True)
             text = skill_src.read_text(encoding="utf-8")
             text = text.replace("<CORTEX_HOME>", str(repo_root))
@@ -287,32 +425,32 @@ def install(
             err=True,
         )
 
-    # ---- Upsert MCP entry into opencode config ----
-    mcp_entry = mcp_home / "build" / "index.js"
-    if not dry_run and mcp_entry.exists():
-        from cortex.mcp.upsert import run as upsert_run
+    # Run distill
+    if not dry_run and config_file.exists():
+        rc = run_distill(config_path=config_file)
+        if rc != 0:
+            typer.echo("    WARNING: distill had errors", err=True)
 
-        upsert_run(
-            mcp_entry=str(mcp_entry),
-            memory_json=str(memory_json),
-            vault_root=str(vault_path),
-            distill_script=str(config_file),
-            distill_python=python,
-            config_dir=str(Path.home() / ".config" / "opencode"),
-            dry_run=False,
-        )
-    elif dry_run:
-        typer.echo(
-            "    [DRY] would upsert cortex MCP entry in opencode config"
-        )
-
-    # ---- Re-distill if upgrade ----
+    # ---- [5/5] Re-distill if upgrade ----
     if upgrade and not no_distill and not dry_run:
-        typer.echo("\n==> [5/6] Re-distill")
+        typer.echo("\n==> [5/5] Re-distill")
         rc = run_distill(config_path=config_file)
         if rc != 0:
             typer.echo("    WARNING: re-distill had errors", err=True)
         typer.echo("    Re-distilled after upgrade")
+    elif not upgrade:
+        typer.echo("\n==> [5/5] (skipped — initial install)")
+
+    # ---- Write manifest ----
+    if not dry_run:
+        _write_manifest(manifest_dir / "manifest.json", actions_file,
+                        str(vault_path), str(repo_root))
+        # Clean up empty backup dir
+        if manifest_dir.exists() and not any(
+            f for f in manifest_dir.iterdir() if f.name != ".actions.jsonl"
+        ):
+            actions_file.unlink(missing_ok=True)
+            manifest_dir.rmdir()
 
     # ---- Done ----
     typer.echo("\n==> Done")
@@ -457,6 +595,7 @@ def status(
     """Show basic health of the Cortex installation."""
     # Try to find config
     config_file = None
+    vault_path = None
     if vault:
         vault_path = Path(vault).expanduser()
         cfg = vault_path / "_sync" / "cortex.yaml"
@@ -504,24 +643,21 @@ def status(
             else:
                 typer.echo("Distilled memory: MISSING — run 'cortex distill'")
 
-            # Check opencode MCP config
-            mcp_cfg = (
-                Path.home()
-                / ".config"
-                / "opencode"
-                / "opencode.jsonc"
+            # Check opencode config exists
+            opencode_cfg = (
+                Path.home() / ".config" / "opencode" / "opencode.jsonc"
             )
-            if not mcp_cfg.exists():
-                mcp_cfg = (
+            if not opencode_cfg.exists():
+                opencode_cfg = (
                     Path.home() / ".config" / "opencode" / "opencode.json"
                 )
             env_cfg = os.environ.get("OPENCODE_CONFIG")
             if env_cfg:
-                mcp_cfg = Path(env_cfg)
-            if mcp_cfg.exists():
-                typer.echo("MCP config:       found")
+                opencode_cfg = Path(env_cfg)
+            if opencode_cfg.exists():
+                typer.echo("opencode config:  found")
             else:
-                typer.echo("MCP config:       not found (no opencode config)")
+                typer.echo("opencode config:  not found")
 
             typer.echo("\nStatus:           HEALTHY" if vp.exists() and mem_json.exists()
                        else "\nStatus:           NEEDS ATTENTION")
@@ -599,7 +735,6 @@ def version() -> None:
     """Print Cortex version information."""
     typer.echo(f"Cortex:  {cortex_version()}")
     typer.echo(f"Schema:  {schema_version()}")
-    typer.echo(f"MCP:     {cortex_version()}")
 
 
 # ---------------------------------------------------------------------------
@@ -717,8 +852,6 @@ def write(
     if not vault_path or not vault_path.exists():
         typer.echo("ERROR: vault not found. Run 'cortex install' first.", err=True)
         raise typer.Exit(code=1)
-
-    import re
 
     note_id = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
     if not note_id:

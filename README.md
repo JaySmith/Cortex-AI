@@ -12,27 +12,25 @@ Capture (agent → vault):   agent  → memory_write  → note written → disti
 
 ## Get Running in One Command
 
-Requires **Python 3.10+** and **Node 18+**.
+Requires **Python 3.10+**.
 
 ```bash
 git clone https://github.com/JaySmith/Cortex-AI.git cortex-ai
 cd cortex-ai
-./setup.sh
+cortex bootstrap          # create venv + install deps
+cortex install            # set up config, distiller, skill
 ```
 
-`setup.sh` is interactive: it prompts for your **vault path** and **opencode skills
-dir** (press Enter to accept the shown defaults — the bundled example vault and
-`~/.config/opencode/skills`). It then installs Python deps into a `.venv`, builds
-the MCP server, generates `<vault>/_sync/cortex.yaml`, runs a first distill,
-installs the `cortex-ai` skill, and prints the exact MCP config to paste into your
-agent. You'll have working distilled output in `<vault>/_sync/distilled/` immediately.
+`cortex install` is interactive: it prompts for your **vault path** (press Enter
+to accept the default — the bundled example vault). It generates
+`<vault>/_sync/cortex.yaml`, runs a first distill, and installs the `cortex-ai`
+skill. You'll have working distilled output in `<vault>/_sync/distilled/`
+immediately.
 
-To skip the prompts (scripting/CI), pass the vault as an argument and/or set env vars:
+To skip the prompts (scripting/CI), pass the vault as an argument:
 
 ```bash
-./setup.sh /path/to/your/vault
-# or fully non-interactive:
-VAULT_ROOT=/path/to/vault OPENCODE_SKILLS_DIR=~/.config/opencode/skills ./setup.sh
+cortex install /path/to/your/vault
 ```
 
 ## Wire It Into Your Agent
@@ -157,33 +155,29 @@ python3 distill.py --config <vault>/_sync/cortex.yaml --check
 
 ### Upgrading a live install
 
-`setup.sh` bootstraps a fresh install; **`deploy.sh`** upgrades an existing one
-whose pieces live in separate places (distiller under `<vault>/_sync/`, MCP under
-`~/.config/opencode/mcp/cortex/`, skill under `~/.config/opencode/skills/`). It is
-idempotent, backs every target up first, re-distills the live vault, and verifies
-the result. Dry-run by default:
+After pulling new code, use `cortex install --upgrade` to back up the existing
+distiller and skill, deploy updated files, and re-distill the live vault:
 
 ```bash
-git pull                      # get the new release
-(cd mcp/cortex && npm run build)
-./deploy.sh                    # preview
-./deploy.sh --apply           # deploy, then restart your agent
+git pull
+cortex install --upgrade ~/Cortex       # full upgrade
+cortex install --upgrade --no-distill   # skip re-distillation
 ```
 
-Override locations with `VAULT_ROOT`, `MCP_HOME`, `SKILLS_DIR` env vars.
+Override locations with `VAULT_ROOT`, `SKILLS_DIR` env vars.
 
 The full increment rules (when to bump MAJOR/MINOR/PATCH and the schema) live in
 **[CHANGELOG.md](CHANGELOG.md)**.
 
 ### Changed your mind?
 
-`setup.sh` and `cortex-import.py` record install manifests under
+`cortex install` records install manifests under
 `<vault>/_sync/backups/`. To revert Cortex to your machine's pre-install state
 (your notes are kept):
 
 ```bash
-python3 cortex-uninstall.py --vault <vault> --latest          # preview
-python3 cortex-uninstall.py --vault <vault> --latest --apply  # revert
+cortex uninstall --vault <vault> --latest          # preview
+cortex uninstall --vault <vault> --latest --apply  # revert
 ```
 
 ## Repo Layout

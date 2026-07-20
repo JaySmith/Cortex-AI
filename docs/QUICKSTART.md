@@ -1,17 +1,10 @@
 # Quick Start (Manual Setup)
 
-The fastest path is `./setup.sh` from the repo root — see the
-[README](../README.md). This page covers the **manual** steps and
+The fastest path is `cortex bootstrap` + `cortex install` from the repo root —
+see the [README](../README.md). This page covers the **manual** steps and
 troubleshooting if you'd rather configure things by hand or need to debug.
 
 ## 1. Install
-
-```bash
-cd your-vault/_sync
-pip install -r requirements.txt
-```
-
-(Or into a venv if you prefer:)
 
 ```bash
 python3 -m venv .venv
@@ -170,7 +163,7 @@ ERROR: PyYAML is required.
 
 Install dependencies:
 ```bash
-pip install -r requirements.txt
+.venv/bin/pip install -r requirements.txt
 ```
 
 ### "vault_path does not exist"
