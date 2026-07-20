@@ -30,7 +30,7 @@ If it's ambiguous whether a request is about the repo or the live install, assum
 ## Layout
 
 - `skills/` — canonical skill templates (source of truth for skills)
-- `distill.py`, `hive_client.py`, `cortex-*.py`, `gen-portfolio.py` — Python tooling
+- `distill.py`, `hive_client.py`, `cortex-*.py` — Python tooling
 - `mcp/cortex/` — MCP server (TypeScript, built to `build/`)
 - `setup.sh` — fresh bootstrap; `deploy.sh` — upgrade an existing install
 - `tests/` — pytest suite (`conftest.py` copies `example-vault` into tmp)

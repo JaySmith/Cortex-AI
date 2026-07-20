@@ -190,7 +190,6 @@ ROADMAP.md              Planned direction for future releases
 distill.py              Build pipeline (vault → agent files) + schema check/migrate
 cortex-import.py        Backup + import an existing agent's config into the vault
 cortex-uninstall.py     Manifest-driven revert to pre-Cortex state (keeps notes)
-gen-portfolio.py        Optional: project portfolio from tier:project notes
 setup.sh                One-command bootstrap for a fresh install (interactive)
 deploy.sh               Upgrade an existing live install (backup-first, idempotent)
 cortex.yaml.example     Config template (setup.sh generates a real one at <vault>/_sync/cortex.yaml)

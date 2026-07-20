@@ -23,7 +23,7 @@ The live install is **not** a checkout of the repo — its pieces are copied to:
 
 | Piece | Live location |
 |-------|---------------|
-| Distiller + companions (`distill.py`, `gen-portfolio.py`, `cortex-*.py`, `VERSION`, `SCHEMA_VERSION`, `CHANGELOG.md`) | `<vault>/_sync/` |
+| Distiller + companions (`distill.py`, `cortex-*.py`, `VERSION`, `SCHEMA_VERSION`, `CHANGELOG.md`) | `<vault>/_sync/` |
 | Skill (`SKILL.md`, with `<CORTEX_HOME>` expanded to real paths) | `~/.config/opencode/skills/cortex-ai/` |
 | Vault (notes + distilled output) | `<vault>/` (e.g. `~/Cortex`) |
 | Python venv | `<vault>/_sync/.venv/bin/python` |
@@ -56,9 +56,9 @@ cortex bootstrap
 
 ### Why the venv matters
 
-`distill.py` and `gen-portfolio.py` import PyYAML, which lives **only** in the
+`distill.py` imports PyYAML, which lives **only** in the
 sibling `.venv` — the macOS Homebrew system Python is externally-managed and can't
-`pip install`. Both scripts **self-bootstrap**: they `os.execv` into
+`pip install`. The script **self-bootstraps**: it `os.execv` into
 `.venv/bin/python` before importing PyYAML, so `python3 distill.py` works from any
 interpreter once the venv exists. If you see `ERROR: PyYAML is required`, the venv
 isn't set up — run step 1 above.

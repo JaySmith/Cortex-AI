@@ -192,7 +192,6 @@ _DISTILLER_FILES = [
     "hive_client.py",
     "cortex-import.py",
     "cortex-uninstall.py",
-    "gen-portfolio.py",
     "VERSION",
     "SCHEMA_VERSION",
     "CHANGELOG.md",

@@ -123,17 +123,6 @@ targets:
 
 Now when you run `distill.py`, it updates the `"instructions"` array to point to core-context.md.
 
-## 8. Generate Portfolio (Optional)
-
-If your vault has project notes with `tier: project` and `jira_epic` fields:
-
-```bash
-python3 gen-portfolio.py            # with live Jira status
-python3 gen-portfolio.py --no-jira  # vault data only
-```
-
-Outputs `PORTFOLIO.md` in your vault root, grouped by phase (discovery | delivery | completed).
-
 ## Next Steps
 
 - Read [VAULT_SCHEMA.md](./VAULT_SCHEMA.md) for full frontmatter reference
