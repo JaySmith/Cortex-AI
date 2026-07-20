@@ -35,7 +35,7 @@ The `skills/cortex-ai/` directory is missing from the repo. Ensure you
 cloned the full repository (not a shallow clone) and are running from the
 repo root.
 
-### Skill directory missing during distill
+### Skill directory missing during encode
 
 ```
 WARNING: skill dir missing, skipping: /path/to/skills/jira
@@ -47,12 +47,12 @@ A note has `tier: skill:jira` but the skill directory doesn't exist. Either:
 2. The note's tier should be changed
 3. The skills target can be disabled in `cortex.yaml`
 
-## Distillation
+## Encoding
 
 ### "Config not found"
 
 ```bash
-cortex distill --config /path/to/your/vault/_sync/cortex.yaml
+cortex encode --config /path/to/your/vault/_sync/cortex.yaml
 ```
 
 Or ensure `_sync/cortex.yaml` exists. `cortex install` generates it
@@ -72,11 +72,11 @@ Notes are silently skipped when:
 - Their type is in `vault_only_types` (default: session, log)
 - Their tags are in `exclude_tags` (default: draft, archived)
 
-Check with `cortex distill --list` to see all notes and their tier/type.
+Check with `cortex encode --list` to see all notes and their tier/type.
 
 ### Distilled output is stale
 
-Run `cortex distill` to rebuild. If you edited notes and the output hasn't
+Run `cortex encode` to rebuild. If you edited notes and the output hasn't
 changed, check that the notes have valid frontmatter with `type` and `tier`.
 
 ## Schema / Versioning
@@ -93,15 +93,15 @@ cortex install --upgrade /path/to/your/vault
 ### Schema migration pending
 
 ```bash
-cortex distill --check
+cortex encode --check
 ```
 
 If it reports a migration is pending, run `cortex install --upgrade` to
-migrate and re-distill.
+migrate and re-encode.
 
 ### "Schema: unknown (fresh vault?)"
 
-The vault has no `_meta` in `memory.json`. Run `cortex distill` to generate
+The vault has no `_meta` in `memory.json`. Run `cortex encode` to generate
 it.
 
 ## Platform Integration
@@ -136,19 +136,19 @@ cortex install /path/to/your/vault
 ### How do I see what notes exist?
 
 ```bash
-cortex distill --list
+cortex encode --list
 ```
 
 ### How do I preview changes before writing?
 
 ```bash
-cortex distill --dry-run
+cortex encode --dry-run
 ```
 
 ### How do I check version/schema health?
 
 ```bash
-cortex distill --check
+cortex encode --check
 cortex status
 ```
 

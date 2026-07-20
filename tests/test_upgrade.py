@@ -73,7 +73,7 @@ class TestUpgradeApply:
 
         result = runner.invoke(app, ["upgrade", "--vault", str(vault), "--apply"])
         assert result.exit_code == 0
-        assert "upgrade complete" in result.output.lower() or "Re-distilled" in result.output
+        assert "upgrade complete" in result.output.lower() or "Re-encoded" in result.output
 
         # Backups should exist
         backups = sync / "backups"

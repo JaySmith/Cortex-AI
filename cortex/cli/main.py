@@ -7,9 +7,9 @@ All user-facing operations consolidated behind a single CLI:
   cortex install         Bootstrap or upgrade Cortex for a user
   cortex install --upgrade Upgrade an existing install
   cortex uninstall       Revert Cortex-installed assets
-  cortex distill         Run vault-to-agent distillation
+  cortex encode          Run vault-to-agent encoding
   cortex status          Show basic health of Cortex
-  cortex memory search   Search distilled memory
+  cortex memory search   Search encoded memory
   cortex memory write    Write a memory note (metadata-only in Phase 1)
   cortex import          Import existing agent context
   cortex version         Print version information
@@ -30,11 +30,11 @@ import typer
 
 from cortex.cli.commands import import_agent as import_agent_module
 from cortex.cli.commands import uninstall as uninstall_cmd
-from cortex.distiller.core import (
+from cortex.encoder.core import (
     cortex_version,
     load_config,
     read_vault_schema,
-    run_distill,
+    run_encode,
     schema_version,
 )
 
@@ -161,7 +161,7 @@ def bootstrap(
     if not shutil.which("python3"):
         _error(
             "python3 not found on PATH",
-            "Cortex requires Python 3.10+ to create a venv and run the distiller.",
+            "Cortex requires Python 3.10+ to create a venv and run the encoder.",
             "Install Python 3.10+ and ensure 'python3' is on your PATH.",
         )
         raise typer.Exit(code=1)
@@ -206,17 +206,6 @@ def bootstrap(
 # install
 # ---------------------------------------------------------------------------
 
-# Files the distiller needs in vault/_sync/
-_DISTILLER_FILES = [
-    "distill.py",
-    "hive_client.py",
-    "cortex-import.py",
-    "cortex-uninstall.py",
-    "VERSION",
-    "SCHEMA_VERSION",
-    "CHANGELOG.md",
-]
-
 
 @app.command()
 def install(
@@ -229,10 +218,10 @@ def install(
         "--upgrade",
         help="Upgrade an existing install",
     ),
-    no_distill: bool = typer.Option(
+    no_encode: bool = typer.Option(
         False,
-        "--no-distill",
-        help="Skip re-distillation after install/upgrade",
+        "--no-encode",
+        help="Skip re-encoding after install/upgrade",
     ),
     dry_run: bool = typer.Option(
         False,
@@ -242,9 +231,8 @@ def install(
 ) -> None:
     """Bootstrap or upgrade Cortex for a user.
 
-    Handles everything: venv deps, config generation, distiller deployment,
-    skill installation, backup, and distillation. Replaces setup.sh and
-    deploy.sh.
+    Handles everything: venv deps, config generation, skill installation,
+    backup, and encoding.
     """
     repo_root = _REPO_ROOT
 
@@ -262,11 +250,11 @@ def install(
 
     vault_path = vault_path.resolve()
     sync_dir = vault_path / "_sync"
-    distilled_dir = sync_dir / "distilled"
-    skills_dir = distilled_dir / "skills"
-    memory_json = distilled_dir / "memory.json"
-    core_context = distilled_dir / "opencode" / "core-context.md"
-    projects_dir = distilled_dir / "opencode" / "projects"
+    encoded_dir = sync_dir / "encoded"
+    skills_dir = encoded_dir / "skills"
+    memory_json = encoded_dir / "memory.json"
+    core_context = encoded_dir / "opencode" / "core-context.md"
+    projects_dir = encoded_dir / "opencode" / "projects"
     config_file = sync_dir / "cortex.yaml"
     opencode_skills_dir = Path.home() / ".config" / "opencode" / "skills"
 
@@ -299,8 +287,8 @@ def install(
 
     python = sys.executable
 
-    # ---- [1/5] Ensure venv deps ----
-    typer.echo("\n==> [1/5] Dependencies")
+    # ---- [1/4] Ensure venv deps ----
+    typer.echo("\n==> [1/4] Dependencies")
     venv_dir = repo_root / ".venv"
     venv_python = venv_dir / "bin" / "python"
     if venv_python.exists():
@@ -323,28 +311,8 @@ def install(
     else:
         typer.echo("    [DRY] would create venv and install deps")
 
-    # ---- [2/5] Deploy distiller ----
-    typer.echo("\n==> [2/5] Distiller")
-    if upgrade:
-        # Backup existing distiller files before overwriting
-        if not dry_run:
-            for fname in _DISTILLER_FILES:
-                src = sync_dir / fname
-                _backup_file(src, manifest_dir)
-        typer.echo(f"    deploying distiller -> {sync_dir}")
-    else:
-        typer.echo(f"    distiller -> {sync_dir}")
-
-    if not dry_run:
-        for fname in _DISTILLER_FILES:
-            src = repo_root / fname
-            if src.exists():
-                dst = sync_dir / fname
-                shutil.copy2(src, dst)
-                _record_action(actions_file, "created", str(dst))
-
-    # ---- [3/5] Config (only if missing) ----
-    typer.echo("\n==> [3/5] Config")
+    # ---- [2/4] Config (only if missing) ----
+    typer.echo("\n==> [2/4] Config")
     sync_dir.mkdir(parents=True, exist_ok=True)
     if config_file.exists():
         typer.echo(f"    {config_file} already exists — leaving it untouched")
@@ -404,8 +372,8 @@ def install(
             _record_action(actions_file, "created", str(config_file))
             typer.echo(f"    wrote {config_file}")
 
-    # ---- [4/5] Skill + first distill ----
-    typer.echo("\n==> [4/5] Skill + distill")
+    # ---- [3/4] Skill + first encode ----
+    typer.echo("\n==> [3/4] Skill + encode")
     if not dry_run:
         # Pre-create skill dirs
         for md in vault_path.rglob("*.md"):
@@ -444,21 +412,21 @@ def install(
             err=True,
         )
 
-    # Run distill
+    # Run encode
     if not dry_run and config_file.exists():
-        rc = run_distill(config_path=config_file)
+        rc = run_encode(config_path=config_file)
         if rc != 0:
-            typer.echo("    WARNING: distill had errors", err=True)
+            typer.echo("    WARNING: encode had errors", err=True)
 
-    # ---- [5/5] Re-distill if upgrade ----
-    if upgrade and not no_distill and not dry_run:
-        typer.echo("\n==> [5/5] Re-distill")
-        rc = run_distill(config_path=config_file)
+    # ---- [4/4] Re-encode if upgrade ----
+    if upgrade and not no_encode and not dry_run:
+        typer.echo("\n==> [4/4] Re-encode")
+        rc = run_encode(config_path=config_file)
         if rc != 0:
-            typer.echo("    WARNING: re-distill had errors", err=True)
-        typer.echo("    Re-distilled after upgrade")
+            typer.echo("    WARNING: re-encode had errors", err=True)
+        typer.echo("    Re-encoded after upgrade")
     elif not upgrade:
-        typer.echo("\n==> [5/5] (skipped — initial install)")
+        typer.echo("\n==> [4/4] (skipped — initial install)")
 
     # ---- Write manifest ----
     if not dry_run:
@@ -481,7 +449,7 @@ def install(
         typer.echo("  cortex status         # verify the install")
         typer.echo("  cortex version        # show version info")
         typer.echo("  cortex import --dry-run  # import existing agent context")
-        typer.echo("  cortex distill        # run distillation manually")
+        typer.echo("  cortex encode        # run encoding manually")
 
 
 # ---------------------------------------------------------------------------
@@ -515,7 +483,7 @@ def uninstall(
     purge: bool = typer.Option(
         False,
         "--purge",
-        help="Also delete _sync/distilled (notes are kept)",
+        help="Also delete _sync/encoded (notes are kept)",
     ),
 ) -> None:
     """Safely revert Cortex-installed assets while preserving user notes."""
@@ -531,12 +499,12 @@ def uninstall(
 
 
 # ---------------------------------------------------------------------------
-# distill
+# encode
 # ---------------------------------------------------------------------------
 
 
 @app.command()
-def distill(
+def encode(
     dry_run: bool = typer.Option(False, "--dry-run", help="Show changes without writing"),
     list_notes: bool = typer.Option(False, "--list", help="List all vault notes with tier/type"),
     show_config: bool = typer.Option(False, "--show-config", help="Print resolved paths as JSON"),
@@ -561,9 +529,9 @@ def distill(
         help="Path to cortex.yaml config file",
     ),
 ) -> None:
-    """Run the vault-to-agent distillation process."""
+    """Run the vault-to-agent encoding process."""
     cfg_path = Path(config_path) if config_path else Path.cwd() / "_sync" / "cortex.yaml"
-    rc = run_distill(
+    rc = run_encode(
         config_path=cfg_path,
         dry_run=dry_run,
         list_only=list_notes,
@@ -621,9 +589,9 @@ def status(
                 typer.echo("Vault:            found")
             else:
                 typer.echo("Vault:            MISSING")
-            mem_json = vp / "_sync" / "distilled" / "memory.json"
+            mem_json = vp / "_sync" / "encoded" / "memory.json"
             if mem_json.exists():
-                typer.echo("Distilled memory: found")
+                typer.echo("Encoded memory:   found")
                 schema = read_vault_schema(vp)
                 code_schema = schema_version()
                 if schema is None:
@@ -638,7 +606,7 @@ def status(
                         err=True,
                     )
             else:
-                typer.echo("Distilled memory: MISSING — run 'cortex distill'")
+                typer.echo("Encoded memory:   MISSING — run 'cortex encode'")
 
             # Check opencode config exists
             opencode_cfg = Path.home() / ".config" / "opencode" / "opencode.jsonc"
@@ -668,7 +636,7 @@ def status(
     else:
         _error(
             "Config not found",
-            "Cortex needs a cortex.yaml config to locate the vault and run distillation.",
+            "Cortex needs a cortex.yaml config to locate the vault and run encoding.",
             "Run 'cortex install' to set up Cortex.",
         )
         raise typer.Exit(code=1)
@@ -801,15 +769,15 @@ def search(
     query: str = typer.Argument(..., help="Search query string"),
     vault: str | None = typer.Option(None, "--vault", help="Vault path (auto-detect by default)"),
 ) -> None:
-    """Search distilled memory from the CLI."""
+    """Search encoded memory from the CLI."""
     # Find memory.json
     mem_path = None
     if vault:
         vp = Path(vault).expanduser()
-        mem_path = vp / "_sync" / "distilled" / "memory.json"
+        mem_path = vp / "_sync" / "encoded" / "memory.json"
     else:
         for p in [Path.cwd(), Path.home() / "Cortex"]:
-            mp = p / "_sync" / "distilled" / "memory.json"
+            mp = p / "_sync" / "encoded" / "memory.json"
             if mp.exists():
                 mem_path = mp
                 break
@@ -817,8 +785,8 @@ def search(
     if not mem_path or not mem_path.exists():
         _error(
             "memory.json not found",
-            "The distilled memory index is required to search notes.",
-            "Run 'cortex distill' to generate memory.json from your vault notes.",
+            "The encoded memory index is required to search notes.",
+            "Run 'cortex encode' to generate memory.json from your vault notes.",
         )
         raise typer.Exit(code=1)
 
@@ -828,7 +796,7 @@ def search(
         _error(
             f"Could not read memory.json: {e}",
             "The memory index file exists but is unreadable or contains invalid JSON.",
-            "Run 'cortex distill' to regenerate memory.json.",
+            "Run 'cortex encode' to regenerate memory.json.",
         )
         raise typer.Exit(code=1) from e
 
@@ -948,7 +916,7 @@ def write(
     typer.echo(f"  type: {note_type}  tier: {tier}")
     if tag_list:
         typer.echo(f"  tags: {tag_list}")
-    typer.echo("\nRun 'cortex distill' to rebuild distilled output.")
+    typer.echo("\nRun 'cortex encode' to rebuild encoded output.")
 
 
 # ---------------------------------------------------------------------------
@@ -1095,8 +1063,8 @@ def doctor(
     else:
         typer.echo("  ○ Schema (skipped — config not found)")
 
-    # Distilled memory
-    mem_json = vault_path / "_sync" / "distilled" / "memory.json"
+    # Encoded memory
+    mem_json = vault_path / "_sync" / "encoded" / "memory.json"
     if mem_json.exists():
         # Check freshness
         mtime = mem_json.stat().st_mtime
@@ -1110,12 +1078,12 @@ def doctor(
             age_str = f"{int(age_days)} days ago"
         fresh = age_days <= 7
         mem_label = "current" if fresh else "stale"
-        typer.echo(f"  {'✓' if fresh else '⚠'} Distilled memory {mem_label} (distilled {age_str})")
+        typer.echo(f"  {'✓' if fresh else '⚠'} Encoded memory {mem_label} (encoded {age_str})")
         if not fresh:
-            typer.echo("    Suggested fix: Run 'cortex distill' to refresh memory")
+            typer.echo("    Suggested fix: Run 'cortex encode' to refresh memory")
     else:
-        typer.echo("  ✗ Distilled memory not found")
-        typer.echo("    Suggested fix: Run 'cortex distill'")
+        typer.echo("  ✗ Encoded memory not found")
+        typer.echo("    Suggested fix: Run 'cortex encode'")
         all_healthy = False
 
     # Memory file validity
@@ -1126,10 +1094,10 @@ def doctor(
             typer.echo(f"  ✓ Memory file valid ({note_count} notes)")
         except (OSError, json.JSONDecodeError) as e:
             typer.echo(f"  ✗ Memory file invalid: {e}")
-            typer.echo("    Suggested fix: Run 'cortex distill' to regenerate")
+            typer.echo("    Suggested fix: Run 'cortex encode' to regenerate")
             all_healthy = False
     else:
-        typer.echo("  ○ Memory file (skipped — distilled memory not found)")
+        typer.echo("  ○ Memory file (skipped — encoded memory not found)")
 
     # Skill installed
     skill_file = Path.home() / ".config" / "opencode" / "skills" / "cortex-ai" / "SKILL.md"
@@ -1178,7 +1146,7 @@ def upgrade(
     vault: str | None = typer.Option(None, "--vault", help="Vault path override"),
     apply: bool = typer.Option(False, "--apply", help="Apply changes (default is preview)"),
 ) -> None:
-    """Re-distill memory and refresh Cortex assets.
+    """Re-encode memory and refresh Cortex assets.
 
     Default is dry-run (preview only). Pass --apply to make changes.
     """
@@ -1218,13 +1186,13 @@ def upgrade(
         typer.echo(f"  Would backup: {sync_dir}")
     else:
         backup_dir.mkdir(parents=True, exist_ok=True)
-        # Backup the distilled directory and config
-        for fname in ["cortex.yaml", "distill.py", "VERSION", "SCHEMA_VERSION"]:
+        # Backup the encoded directory and config
+        for fname in ["cortex.yaml"]:
             _backup_file(sync_dir / fname, backup_dir)
-        distilled = sync_dir / "distilled"
-        if distilled.exists():
-            for item in distilled.iterdir():
-                _backup_file(item, backup_dir / "distilled")
+        encoded = sync_dir / "encoded"
+        if encoded.exists():
+            for item in encoded.iterdir():
+                _backup_file(item, backup_dir / "encoded")
         typer.echo(f"  Backed up: {backup_dir}")
 
     # Schema
@@ -1236,15 +1204,15 @@ def upgrade(
     else:
         typer.echo(f"  Schema: {code_schema} (unchanged)")
 
-    # Re-distill
+    # Re-encode
     if not apply:
-        typer.echo("  Would re-distill memory")
+        typer.echo("  Would re-encode memory")
     else:
-        rc = run_distill(config_path=config_file)
+        rc = run_encode(config_path=config_file)
         if rc != 0:
-            typer.echo("  WARNING: distill had errors", err=True)
+            typer.echo("  WARNING: encode had errors", err=True)
         else:
-            typer.echo("  Re-distilled memory")
+            typer.echo("  Re-encoded memory")
 
     typer.echo("")
     if not apply:

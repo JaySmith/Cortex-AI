@@ -17,7 +17,7 @@ class TestDoctor:
         sync_dir = vault / "_sync"
         sync_dir.mkdir(parents=True)
         (sync_dir / "cortex.yaml").write_text("vault_path: /tmp/vault\n")
-        distilled = sync_dir / "distilled"
+        distilled = sync_dir / "encoded"
         distilled.mkdir()
         (distilled / "memory.json").write_text('{"notes": {}}')
 
@@ -53,7 +53,7 @@ class TestDoctor:
         sync_dir = vault / "_sync"
         sync_dir.mkdir(parents=True)
         (sync_dir / "cortex.yaml").write_text("vault_path: /tmp/vault\n")
-        distilled = sync_dir / "distilled"
+        distilled = sync_dir / "encoded"
         distilled.mkdir()
         (distilled / "memory.json").write_text('{"notes": {}}')
 

@@ -1,7 +1,7 @@
 # Development Guide
 
 How to set up this repo for **contributing to Cortex itself** — editing the
-distiller, CLI, or skill. If you just want to *use* Cortex, see the
+encoder, CLI, or skill. If you just want to *use* Cortex, see the
 [README](../README.md) and [QUICKSTART](./QUICKSTART.md) instead.
 
 ## Prerequisites
@@ -23,9 +23,9 @@ The live install is **not** a checkout of the repo — its pieces are copied to:
 
 | Piece | Live location |
 |-------|---------------|
-| Distiller + companions | `<vault>/_sync/` |
+| Config | `<vault>/_sync/cortex.yaml` |
 | Skill (`SKILL.md` with paths expanded) | `~/.config/opencode/skills/cortex-ai/` |
-| Vault (notes + distilled output) | `<vault>/` |
+| Vault (notes + encoded output) | `<vault>/` |
 | Python venv | `<repo>/.venv/` |
 
 Consequences:
@@ -51,15 +51,15 @@ cortex bootstrap
 
 `build/` and `.venv/` are gitignored — they're generated, never committed.
 
-## Working on the distiller (`distill.py`)
+## Working on the encoder (`cortex/encoder/core.py`)
 
 Use the bundled `example-vault/` as a sandbox — it has one note per tier and
 works out of the box, with no risk to a real vault.
 
 ```bash
-cortex distill --config example-vault/_sync/cortex.yaml --dry-run
-cortex distill --config example-vault/_sync/cortex.yaml --list
-cortex distill --config example-vault/_sync/cortex.yaml
+cortex encode --config example-vault/_sync/cortex.yaml --dry-run
+cortex encode --config example-vault/_sync/cortex.yaml --list
+cortex encode --config example-vault/_sync/cortex.yaml
 ```
 
 Useful flags:
@@ -82,7 +82,7 @@ The safe, repeatable cycle for a change that touches the live install:
 
 ```bash
 # 1. Edit in the repo (never the live install)
-#    distill.py / skills/cortex-ai/SKILL.md
+#    cortex/encoder/core.py / skills/cortex-ai/SKILL.md
 
 # 2. Preview the deploy (changes nothing)
 cortex install --upgrade --dry-run ~/Cortex
@@ -93,7 +93,7 @@ cortex install --upgrade ~/Cortex
 
 `cortex install --upgrade` backs up every live target first, copies repo
 files into their live locations, renders `SKILL.md` (expanding path
-placeholders), re-distills the live vault, and verifies versions/schema
+placeholders), re-encodes the live vault, and verifies versions/schema
 match. It is idempotent and refuses to downgrade a newer vault.
 
 ## Running the tests
@@ -148,7 +148,7 @@ Cortex tracks two numbers (full rules in [CHANGELOG.md](../CHANGELOG.md)):
 
 - **Release version** — SemVer in `VERSION`. Bump for any user-visible change.
 - **Schema version** — integer in `SCHEMA_VERSION`. Bump only when the
-  on-disk data contract changes, with a migration in the distiller.
+  on-disk data contract changes, with a migration in the encoder.
 
 Release checklist:
 
@@ -156,7 +156,7 @@ Release checklist:
 2. Promote CHANGELOG `[Unreleased]` to `[x.y.z] — YYYY-MM-DD`.
 3. Commit as `chore: release x.y.z`.
 4. Deploy: `cortex install --upgrade ~/Cortex`, then restart the agent.
-5. Verify: `cortex distill --check` should report both versions in sync.
+5. Verify: `cortex encode --check` should report both versions in sync.
 
 ## Reverting a broken deploy
 
@@ -167,6 +167,6 @@ cortex uninstall --vault ~/Cortex --latest --apply  # revert
 
 ## See also
 
-- [EXTENDING.md](./EXTENDING.md) — add a custom output target to the distiller
+- [EXTENDING.md](./EXTENDING.md) — add a custom output target to the encoder
 - [VAULT_SCHEMA.md](./VAULT_SCHEMA.md) — frontmatter reference
 - [CHANGELOG.md](../CHANGELOG.md) — versioning rules in full

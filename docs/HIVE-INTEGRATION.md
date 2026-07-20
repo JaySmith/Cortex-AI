@@ -5,7 +5,7 @@
 
 ## Overview
 
-cortex-ai is a single-machine vault distiller. cortex-hub is a multi-agent coordination layer with shared memory and messaging. This plan makes them work together: cortex-ai is the **brain** (vault, tiers, distillation, structured memory), cortex-hub is the **nervous system** (agent registry, messaging, shared memory store).
+cortex-ai is a single-machine vault encoder. cortex-hub is a multi-agent coordination layer with shared memory and messaging. This plan makes them work together: cortex-ai is the **brain** (vault, tiers, encoding, structured memory), cortex-hub is the **nervous system** (agent registry, messaging, shared memory store).
 
 ## Repository Ownership
 
@@ -13,7 +13,7 @@ These are **separate repos**. The integration is via HTTP, not shared code.
 
 | Repo | What lives here | Integration surface |
 |---|---|---|
-| `cortex-ai` | vault distiller, MCP server, skills, **this plan** | Python hub client (`hive_client.py`) calls hub HTTP API |
+| `cortex-ai` | vault encoder, MCP server, skills, **this plan** | Python hub client (`cortex.hub.client`) calls hub HTTP API |
 | `cortex-hub` | hub MCP server, agent-sdk, daemon agents | Bearer auth middleware (Phase 7), existing `hub_memory_*` tools |
 
 **Phase ownership:**
@@ -21,7 +21,7 @@ These are **separate repos**. The integration is via HTTP, not shared code.
 | Phase | Repo | Change |
 |---|---|---|
 | Phase 1: Config + migration | cortex-ai | Config parsing, schema bump |
-| Phase 2: Python hub client | cortex-ai | New file `hive_client.py` |
+| Phase 2: Python hub client | cortex-ai | New module `cortex/hub/client.py` |
 | Phase 3: CLI commands | cortex-ai | `--hive-push/pull/status` |
 | Phase 4: Hive frontmatter | cortex-ai | `VaultNote.hive` field |
 | Phase 5: MCP server proxy | cortex-ai | TypeScript hub client in MCP server |
@@ -71,7 +71,7 @@ Key behaviors:
 2. Each cortex-ai server optionally connects to a shared cortex-hub (HTTP).
 3. On `memory_write` with `hive: true` (or tier matching), the local server pushes to the hub.
 4. On `memory_search`, the local server merges local + hub results.
-5. `distill.py --hive-push` / `--hive-pull` handle bulk sync for the CLI workflow.
+5. `cortex encode --hive-push` / `--hive-pull` handle bulk sync for the CLI workflow.
 6. The hub is the write authority — conflicts resolve by `updated` timestamp (newest wins).
 
 ---
@@ -80,7 +80,7 @@ Key behaviors:
 
 **Files to change:**
 - `cortex.yaml.example` — add `hive:` block
-- `distill.py` — parse new `hive:` config keys, bump `SCHEMA_VERSION` to 2, add migration
+- `cortex/encoder/core.py` — parse new `hive:` config keys, bump `SCHEMA_VERSION` to 2, add migration
 - `SCHEMA_VERSION` file — `1` → `2`
 
 **cortex.yaml additions:**
@@ -96,7 +96,7 @@ hive:
   sync_interval: 300        # seconds, 0 = manual only
 ```
 
-**distill.py changes:**
+**cortex/encoder/core.py changes:**
 - `load_config()` — parse `hive:` section with defaults
 - `check_and_migrate()` — v1→v2 migration: add `hive.enabled: false` to existing config, backup `_sync/` first
 - `--show-config` — add `hive_enabled`, `hive_hub_url`, `hive_machine_id` fields
@@ -105,7 +105,7 @@ hive:
 
 ## Phase 2: Python Hub Client
 
-**New file:** `hive_client.py` (~120 lines)
+**Module:** `cortex/hub/client.py` (~120 lines)
 
 A minimal Python HTTP client that speaks the hub's MCP-over-HTTP protocol.
 
@@ -230,11 +230,11 @@ class HubClient:
 
 ## Phase 3: CLI Commands (`--hive-push` / `--hive-pull`)
 
-**File:** `distill.py`
+**File:** `cortex/encoder/core.py`
 
 ### `--hive-push`
 
-After vault scan + distillation, push all hive-eligible notes to the hub.
+After vault scan + encoding, push all hive-eligible notes to the hub.
 
 ```python
 def hive_push(notes, config):
@@ -353,7 +353,7 @@ parser.add_argument("--hive-status", action="store_true", help="Show hive connec
 
 ## Phase 4: Hive Frontmatter
 
-**File:** `distill.py`
+**File:** `cortex/encoder/core.py`
 
 Add `hive` field to `VaultNote`:
 
@@ -395,7 +395,7 @@ HIVE_MACHINE_ID   → (auto-generated UUID, persisted to _sync/machine-id)
 // After writeNote() succeeds:
 if (hiveEnabled && noteEligibleForHive(params, config)) {
     hubPushNote(params).catch(err =>
-        log.warn("hive push failed, will retry on next distill", { error: err.message })
+        log.warn("hive push failed, will retry on next encode", { error: err.message })
     );
 }
 ```
@@ -440,14 +440,14 @@ Add a mtime check on a `hive-sync.json` file (written after each hub sync) along
 | Command | What it does |
 |---|---|
 | `cortex hive status` | Show hub URL, machine ID, connected yes/no, last sync time, notes synced count, tier list |
-| `cortex hive push` | Run `distill.py --hive-push`, report count |
-| `cortex hive pull` | Run `distill.py --hive-pull`, report count |
+| `cortex hive push` | Run `cortex encode --hive-push`, report count |
+| `cortex hive pull` | Run `cortex encode --hive-pull`, report count |
 | `cortex hive setup` | Interactive: prompt for hub_url, machine_id, replicate_tiers; write to cortex.yaml |
 
 ### `hive status` implementation:
 ```bash
-python3 distill.py --show-config  # get hive fields
-python3 distill.py --hive-status  # test hub connection, count vault/* keys
+cortex encode --show-config  # get hive fields
+cortex encode --hive-status  # test hub connection, count vault/* keys
 ```
 
 ### `hive setup` implementation:
@@ -492,7 +492,7 @@ if (HUB_TOKEN) {
 
 ### cortex-ai changes:
 
-**File:** `hive_client.py` — pass token in headers (already built into the client from Phase 2).
+**File:** `cortex.hub.client` — pass token in headers (already built into the client from Phase 2).
 
 **File:** `cortex.yaml.example` — add `hub_token: ""` to hive block.
 
@@ -502,10 +502,10 @@ if (HUB_TOKEN) {
 
 | Item | Where | What | Effort |
 |---|---|---|---|
-| `expires_at` frontmatter | `distill.py` | Skip expired notes at distill + query time | Small |
-| `agents:` routing | `distill.py` | Per-target filtering by platform (field already parsed) | Small |
-| `--graph` command | `distill.py` | Parse `[[wiki-links]]` into edge list + visualization | Medium |
-| Section-aware merge | `distill.py` + `hive_client.py` | Replace timestamp-wins with per-section diff | Future |
+| `expires_at` frontmatter | `cortex/encoder/core.py` | Skip expired notes at encode + query time | Small |
+| `agents:` routing | `cortex/encoder/core.py` | Per-target filtering by platform (field already parsed) | Small |
+| `--graph` command | `cortex/encoder/core.py` | Parse `[[wiki-links]]` into edge list + visualization | Medium |
+| Section-aware merge | `cortex/encoder/core.py` + `cortex.hub.client` | Replace timestamp-wins with per-section diff | Future |
 | TypeScript hub client | `mcp/cortex/src/hub-client.ts` | Shared client for real-time MCP proxy | When needed |
 
 ---
@@ -553,12 +553,12 @@ Phase 8+ (ROADMAP items) ─── independent, parallel with everything
 
 - [ ] Phase 1: Config + schema migration
   - [ ] Add `hive:` block to `cortex.yaml.example`
-  - [ ] Parse `hive:` config in `distill.py`
+  - [ ] Parse `hive:` config in `cortex encode`
   - [ ] Add migration v1→v2 in `check_and_migrate()`
   - [ ] Bump `SCHEMA_VERSION` to 2
   - [ ] Add hive fields to `--show-config` output
 - [ ] Phase 2: Python hub client
-  - [ ] Create `hive_client.py`
+  - [ ] Create `cortex/hub/client.py`
   - [ ] Test against running cortex-hub
 - [ ] Phase 3: CLI commands
   - [ ] Add `hive_eligible()` function
@@ -582,7 +582,7 @@ Phase 8+ (ROADMAP items) ─── independent, parallel with everything
 - [ ] Phase 7: Bearer token auth (after phases 1-6)
   - [ ] Add middleware to cortex-hub
   - [ ] Add `hub_token` to cortex-ai config
-  - [ ] Pass token in `hive_client.py`
+  - [ ] Pass token in `cortex.hub.client`
 - [ ] Phase 8+: ROADMAP items
   - [ ] `expires_at` frontmatter
   - [ ] `agents:` routing

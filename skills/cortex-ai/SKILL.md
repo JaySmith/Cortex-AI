@@ -6,16 +6,14 @@ description: Work with the Cortex vault — search notes, list by tier/type, add
 # Cortex AI
 
 Persistent, tiered memory for AI agents. Notes live in an Obsidian-style vault
-and are distilled into agent-consumable files; an MCP server serves them at
+and are encoded into agent-consumable files; an MCP server serves them at
 runtime.
 
-> **Paths.** `<CORTEX_HOME>` is the deployed Cortex runtime. Resolve vault paths
-> at runtime: `python3 <CORTEX_HOME>/distill.py --show-config` (returns JSON with
-> `vault_path`, `config_file`, `memory_json`, etc.). Always invoke Python scripts
-> with plain `python3` — the distiller self-bootstraps into its venv.
+> **Paths.** Resolve vault paths at runtime: `cortex encode --show-config`
+> (returns JSON with `vault_path`, `config_file`, `memory_json`, etc.).
 
 **MCP tools (read):** `cortex_memory_search`, `cortex_memory_get`, `cortex_memory_related`
-**MCP tools (write):** `cortex_memory_write` — creates/updates a note and auto-triggers distillation
+**MCP tools (write):** `cortex_memory_write` — creates/updates a note and auto-triggers encoding
 **MCP tools (admin):** `cortex_memory_reload` — force-refresh the index (rarely needed; auto-reloads on file change)
 
 ---
@@ -71,7 +69,7 @@ Evaluate the recent conversation for capturable content and write it to the vaul
 2. `cortex_memory_write(..., update: true)` to patch, or `cortex_memory_write(...)` to create.
 3. Report a one-line summary (id + created/updated).
 
-Trigger phrases: "capture this", "distill that", "save what we decided", "update your memory".
+Trigger phrases: "capture this", "encode that", "save what we decided", "update your memory".
 
 ### sync
 
@@ -83,14 +81,14 @@ A sync is **capture-then-rebuild-then-drain**, in this order:
 
 2. **Then rebuild.**
    ```bash
-   python3 <CORTEX_HOME>/distill.py
+   cortex encode
    ```
 
 3. **Then drain spent session artifacts.** For each `log`/`session` note written *before
    this session*, patch `drained: true` via `cortex_memory_write(..., update: true)`.
    Never drain notes written in the current session. Then purge:
    ```bash
-   python3 <CORTEX_HOME>/distill.py --purge-apply
+   cortex encode --purge-apply
    ```
 
 Trigger phrases: "sync", "cortex sync", "sync my vault".
@@ -108,10 +106,10 @@ Trigger phrases: "sync", "cortex sync", "sync my vault".
 | `core` | Standing preferences, persona, default behaviours — always loaded |
 | `skill:<name>` | Heavy knowledge needed only when a specific skill loads |
 | `project` | Project context (goals, roadmap, phase) |
-| `vault-only` | Research, drafts, session notes — never distilled to agents |
+| `vault-only` | Research, drafts, session notes — never encoded to agents |
 
 ---
 
-`cortex_memory_write` triggers distillation automatically in the background. The MCP
+`cortex_memory_write` triggers encoding automatically in the background. The MCP
 server auto-reloads its index when `memory.json` changes on disk (~1-2s). Use
 `cortex_memory_reload` only to force an immediate refresh.

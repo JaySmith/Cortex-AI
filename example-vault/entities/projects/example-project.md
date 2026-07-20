@@ -12,13 +12,13 @@ tags: [project, demo]
 
 # Example Project
 
-A placeholder project note showing how `tier: project` notes are distilled into
-per-project context files under `distilled/opencode/projects/`.
+A placeholder project note showing how `tier: project` notes are encoded into
+per-project context files under `encoded/opencode/projects/`.
 
 ## Status
 - Phase: delivery
 - Owner: you
 
 ## Notes
-Replace this with a real project once you have wired the distiller to your own vault.
+Replace this with a real project once you have wired the encoder to your own vault.
 Project notes are lazy-loaded: the agent reads this file only when the project comes up.

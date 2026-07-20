@@ -13,7 +13,7 @@ runner = CliRunner()
 
 class TestErrorMessages:
     def test_install_missing_vault_shows_structured_error(self, tmp_path: Path) -> None:
-        result = runner.invoke(app, ["install", str(tmp_path / "nonexistent"), "--no-distill"])
+        result = runner.invoke(app, ["install", str(tmp_path / "nonexistent"), "--no-encode"])
         assert result.exit_code == 1
         # Should contain the three-part error structure
         output = result.output.lower()

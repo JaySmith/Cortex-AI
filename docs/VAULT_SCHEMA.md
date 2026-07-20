@@ -1,6 +1,6 @@
 # Cortex Vault Schema
 
-How to structure your Obsidian vault for distillation.
+How to structure your Obsidian vault for encoding.
 
 > **For the canonical data model** (field definitions, types, hub value format),
 > see [`VAULT-NOTE-SCHEMA.md`](VAULT-NOTE-SCHEMA.md). This file covers directory
@@ -10,11 +10,9 @@ How to structure your Obsidian vault for distillation.
 
 ```
 your-vault/
-├── _sync/                          (distiller lives here + config)
-│   ├── distill.py                 
-│   ├── gen-portfolio.py           
+├── _sync/                          (config + encoded output)
 │   ├── cortex.yaml                (edit this)
-│   └── distilled/                 (generated output)
+│   └── encoded/                   (generated output)
 │
 ├── feedback/                       (tier: core — always eager)
 │   ├── permissions.md
@@ -54,7 +52,7 @@ your-vault/
 
 ## Frontmatter Reference
 
-Every note that should be distilled **must** have YAML frontmatter:
+Every note that should be encoded **must** have YAML frontmatter:
 
 ```yaml
 ---
@@ -68,7 +66,7 @@ updated: "2024-01-15"
 ---
 ```
 
-### `id` (required for distillation)
+### `id` (required for encoding)
 
 - Must be unique across the vault
 - Used as the filename in output (e.g., `my-api.md`)
@@ -79,8 +77,8 @@ updated: "2024-01-15"
 
 Notes without a `type` are skipped entirely.
 
-| Type | Purpose | Distilled? |
-|------|---------|-----------|
+| Type | Purpose | Encoded? |
+|------|---------|----------|
 | `knowledge` | Patterns, docs, reference material | Yes, if tier allows |
 | `entity` | Data structures, schema definitions, catalogs | Yes, if tier allows |
 | `feedback` | Standing preferences, persona, permissions | Yes, if tier allows |
@@ -92,12 +90,12 @@ Notes without a `type` are skipped entirely.
 
 Routes the note to specific output targets:
 
-| Tier | Behavior | Distilled Into |
+| Tier | Behavior | Encoded Into |
 |------|----------|---|
 | `core` | Eager: concatenated into core-context.md on every sync | core-context.md |
 | `skill:name` | Lazy: embedded into `skills/name/reference.md` | skill reference.md |
 | `project` | Lazy: individual project file in `projects/` | projects/*.md |
-| `vault-only` | Never distilled; stays in Obsidian only | — |
+| `vault-only` | Never encoded; stays in Obsidian only | — |
 
 Examples:
 - `tier: core` → Always loaded for agents
@@ -115,14 +113,14 @@ Examples: `API Reference`, `Workflow Patterns`, `Hardware Diagnostics`
 
 List of tags for filtering. Some tags have special meaning:
 
-- `draft` → excluded from distillation (configurable)
-- `archived` → excluded from distillation (configurable)
-- `session-only` → excluded from distillation (configurable)
+- `draft` → excluded from encoding (configurable)
+- `archived` → excluded from encoding (configurable)
+- `session-only` → excluded from encoding (configurable)
 - Custom tags → filtered by config in `exclude_tags` section
 
 ### `aliases` (optional)
 
-List of human-readable titles. Used for display (e.g., section headings in distilled output).
+List of human-readable titles. Used for display (e.g., section headings in encoded output).
 If absent, the title is derived from the `id` (slug → Title Case).
 
 ```yaml
@@ -235,7 +233,7 @@ updated: "2026-07-10"
 #### Why write notes the agent can never read?
 
 `vault-only` is a deliberate feature, not a dead end. A note in this tier can be
-**written by the assistant but is never distilled back into its context** — the
+**written by the assistant but is never encoded back into its context** — the
 assistant can capture it, but can't read it on a later turn. That one-way flow
 gives you four things:
 
@@ -257,7 +255,7 @@ gives you four things:
   inference time until you promote it.
 
 `session` and `log` note types default to this tier automatically. To promote a
-note later, just change its `tier` and re-distill.
+note later, just change its `tier` and re-encode.
 
 ## Special Frontmatter (Optional)
 
@@ -278,7 +276,7 @@ Some notes support extra fields for specific features:
 
 ## Exclusion Rules
 
-Notes are excluded from distillation if:
+Notes are excluded from encoding if:
 
 1. **No `type` field** → entirely skipped
 2. **tier: vault-only** → explicitly excluded
@@ -288,7 +286,7 @@ Notes are excluded from distillation if:
 
 ## Wiki Links
 
-By default, distill.py strips Obsidian wiki links:
+By default, the encoder strips Obsidian wiki links:
 
 - `[[foo|bar]]` → `bar`
 - `[[page-title]]` → `page-title`
@@ -309,6 +307,6 @@ Disable with `strip_wiki_links: false` in cortex.yaml.
 
 No built-in linting yet, but good habits:
 
-- Run `distill.py --list` to see all notes + tiers
-- Run `distill.py --dry-run` before syncing
+- Run `cortex encode --list` to see all notes + tiers
+- Run `cortex encode --dry-run` before syncing
 - Check `_sync/last-sync.json` for state tracking

@@ -1,10 +1,10 @@
-"""Tests for distiller — pure functions and VaultNote model."""
+"""Tests for encoder — pure functions and VaultNote model."""
 
 import json
 
 import pytest
 
-from cortex.distiller.core import (
+from cortex.encoder.core import (
     VaultNote,
     excluded,
     find_drained_notes,
@@ -442,7 +442,7 @@ class TestLoadConfig:
 
 class TestReadVaultSchema:
     def test_valid_memory_json(self, tmp_path):
-        sync_dir = tmp_path / "_sync" / "distilled"
+        sync_dir = tmp_path / "_sync" / "encoded"
         sync_dir.mkdir(parents=True)
         (sync_dir / "memory.json").write_text(json.dumps({"_meta": {"schema_version": 2}}))
         assert read_vault_schema(tmp_path) == 2
@@ -451,13 +451,13 @@ class TestReadVaultSchema:
         assert read_vault_schema(tmp_path) is None
 
     def test_no_meta_field(self, tmp_path):
-        sync_dir = tmp_path / "_sync" / "distilled"
+        sync_dir = tmp_path / "_sync" / "encoded"
         sync_dir.mkdir(parents=True)
         (sync_dir / "memory.json").write_text(json.dumps({"notes": {}}))
         assert read_vault_schema(tmp_path) is None
 
     def test_corrupted_json(self, tmp_path):
-        sync_dir = tmp_path / "_sync" / "distilled"
+        sync_dir = tmp_path / "_sync" / "encoded"
         sync_dir.mkdir(parents=True)
         (sync_dir / "memory.json").write_text("NOT JSON {{{")
         assert read_vault_schema(tmp_path) is None

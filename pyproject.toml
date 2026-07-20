@@ -39,14 +39,6 @@ target-version = "py310"
 select = ["E", "F", "I", "B", "UP"]
 ignore = []
 
-[tool.ruff.lint.per-file-ignores]
-# Legacy self-bootstrapping scripts — import aliasing and post-bootstrap imports
-# are intentional patterns for venv detection. Deprecated shims have unused sys.
-"distill.py" = ["F401"]
-"cortex-import.py" = ["F401"]
-"cortex-uninstall.py" = ["F401", "E501"]
-"hive_client.py" = ["F401"]
-
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
@@ -62,7 +54,7 @@ no_implicit_optional = true
 
 [[tool.mypy.overrides]]
 module = [
-    "cortex.distiller.core",
+    "cortex.encoder.core",
     "cortex.cli.commands.import_agent",
     "cortex.cli.commands.uninstall",
     "cortex.hub.client",

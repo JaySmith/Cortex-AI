@@ -1,13 +1,10 @@
-"""Tests for hive_client.py — SSE parsing and client helpers."""
+"""Tests for cortex.hub.client — SSE parsing and client helpers."""
 
 import json
-import sys
-from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from hive_client import HubClient, HubConnectionError
+from cortex.hub.client import HubClient, HubConnectionError
 
 # ---------------------------------------------------------------------------
 # _parse_sse (static method — pure text parsing)

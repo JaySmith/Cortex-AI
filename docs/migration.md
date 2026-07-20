@@ -15,7 +15,7 @@ release never bumps the schema.
 
 ## Automatic Migration
 
-On every run, the distiller compares the code's schema version against the
+On every run, the encoder compares the code's schema version against the
 one stamped in the vault's `memory.json`:
 
 - **Equal** — proceed normally.
@@ -39,7 +39,7 @@ cp -r /path/to/your/vault /path/to/your/vault.bak
 ### Step 2: Check current state
 
 ```bash
-cortex distill --check
+cortex encode --check
 ```
 
 This reports the code schema version and the vault schema version.
@@ -58,18 +58,18 @@ notes. Common changes:
 - Changing allowed values for `type` or `tier`
 - Restructuring `memory.json` output format
 
-### Step 5: Re-distill
+### Step 5: Re-encode
 
 ```bash
-cortex distill
+cortex encode
 ```
 
-The distiller will stamp the new schema version into `memory.json._meta`.
+The encoder will stamp the new schema version into `memory.json._meta`.
 
 ### Step 6: Verify
 
 ```bash
-cortex distill --check
+cortex encode --check
 cortex status
 ```
 
@@ -81,6 +81,19 @@ Both should report compatible schema versions.
 |---------|---------|
 | 1 | Initial schema |
 | 2 | Added structured `memory.json` output with `_meta` block |
+
+## Path Change: `distilled/` → `encoded/`
+
+As part of the rename from "distill" to "encode", the output directory has
+moved from `_sync/distilled/` to `_sync/encoded/`. If you have an existing
+vault with `_sync/distilled/`, simply rename it:
+
+```bash
+mv /path/to/your/vault/_sync/distilled /path/to/your/vault/_sync/encoded
+```
+
+Or let `cortex install --upgrade` handle it — it will create the new
+directory on the next run.
 
 ## Reverting
 

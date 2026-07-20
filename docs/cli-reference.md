@@ -32,30 +32,30 @@ cortex bootstrap
 Set up or upgrade a Cortex installation.
 
 ```
-cortex install [VAULT] [--upgrade] [--no-distill] [--dry-run]
+cortex install [VAULT] [--upgrade] [--no-encode] [--dry-run]
 ```
 
 | Argument / Flag | Default | Description |
 |-----------------|---------|-------------|
 | `VAULT` | prompt | Vault path (interactive prompt if omitted) |
-| `--upgrade` | off | Backup existing files, deploy updates, re-distill |
-| `--no-distill` | off | Skip re-distillation (with `--upgrade`) |
+| `--upgrade` | off | Backup existing files, deploy updates, re-encode |
+| `--no-encode` | off | Skip re-encoding (with `--upgrade`) |
 | `--dry-run` | off | Preview changes without writing |
 
 **What it does (initial install):**
 
 1. Ensures venv deps are installed (creates venv if needed)
-2. Deploys distiller scripts to `<vault>/_sync/`
+2. Deploys encoder scripts to `<vault>/_sync/`
 3. Generates `<vault>/_sync/cortex.yaml` (if missing)
 4. Installs the `cortex-ai` skill to `~/.config/opencode/skills/`
-5. Runs first distillation
+5. Runs first encoding
 
 ```
 cortex install                          # interactive
 cortex install ~/Cortex                 # non-interactive
 cortex install --upgrade ~/Cortex       # upgrade existing
 cortex install --dry-run ~/Cortex       # preview only
-cortex install --upgrade --no-distill ~/Cortex  # skip re-distill
+cortex install --upgrade --no-encode ~/Cortex  # skip re-encode
 ```
 
 ---
@@ -74,7 +74,7 @@ cortex uninstall --vault VAULT [--latest] [--backup NAME] [--apply] [--purge]
 | `--latest` | `true` | Undo only the most recent manifest |
 | `--backup NAME` | `None` | Undo a specific backup directory |
 | `--apply` | off | Actually make changes (default is dry-run) |
-| `--purge` | off | Also delete `_sync/distilled/` |
+| `--purge` | off | Also delete `_sync/encoded/` |
 
 ```
 cortex uninstall --vault ~/Cortex --latest          # preview
@@ -84,12 +84,12 @@ cortex uninstall --vault ~/Cortex --latest --apply --purge  # full cleanup
 
 ---
 
-## cortex distill
+## cortex encode
 
-Run vault-to-agent distillation.
+Run vault-to-agent encoding.
 
 ```
-cortex distill [--dry-run] [--list] [--show-config] [--check] [--graph]
+cortex encode [--dry-run] [--list] [--show-config] [--check] [--graph]
                [--purge] [--purge-apply] [--config PATH]
                [--hive-push] [--hive-pull] [--hive-status]
 ```
@@ -109,12 +109,12 @@ cortex distill [--dry-run] [--list] [--show-config] [--check] [--graph]
 | `--hive-status` | Show hive connection status |
 
 ```
-cortex distill                          # normal run
-cortex distill --dry-run                # preview
-cortex distill --list                   # see all notes
-cortex distill --check                  # version/schema health
-cortex distill --show-config            # resolved paths
-cortex distill --config ~/Cortex/_sync/cortex.yaml  # explicit config
+cortex encode                          # normal run
+cortex encode --dry-run                # preview
+cortex encode --list                   # see all notes
+cortex encode --check                  # version/schema health
+cortex encode --show-config            # resolved paths
+cortex encode --config ~/Cortex/_sync/cortex.yaml  # explicit config
 ```
 
 ---
@@ -131,7 +131,7 @@ cortex status [--vault VAULT]
 |------|---------|-------------|
 | `--vault` | auto-detect | Vault path |
 
-Reports: config found, vault found, distilled memory found, schema version
+Reports: config found, vault found, encoded memory found, schema version
 status, opencode config found.
 
 ```
@@ -154,7 +154,7 @@ cortex doctor [--platform NAME] [--vault VAULT]
 | `--platform NAME` | all | Check a specific platform only |
 | `--vault` | auto-detect | Vault path |
 
-Checks core assets (config, vault, distilled memory, skill) and each
+Checks core assets (config, vault, encoded memory, skill) and each
 platform integration (opencode, codex, copilot).
 
 ```
@@ -210,7 +210,7 @@ Outputs the release version (`VERSION` file) and schema version
 
 ## cortex memory search
 
-Search distilled memory from the CLI.
+Search encoded memory from the CLI.
 
 ```
 cortex memory search QUERY [--vault VAULT]
@@ -249,8 +249,8 @@ cortex memory write --title TITLE --type TYPE --tier TIER
 | `--category` | Category label |
 | `--vault` | Vault path (auto-detect if omitted) |
 
-Creates the note file with frontmatter. Run `cortex distill` afterward to
-rebuild distilled output.
+Creates the note file with frontmatter. Run `cortex encode` afterward to
+rebuild encoded output.
 
 ```
 cortex memory write --title "TypeScript Style" --type feedback --tier core

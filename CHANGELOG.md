@@ -11,7 +11,7 @@ Cortex tracks **two independent numbers**:
 | Number | File | Meaning | Consumers |
 |--------|------|---------|-----------|
 | **Release version** (SemVer, e.g. `1.0.0`) | `VERSION` | Which release of the Cortex toolchain this is | humans, changelog, `--version`, MCP `serverInfo.version`, `package.json` |
-| **Schema version** (integer, e.g. `1`) | `SCHEMA_VERSION` | The on-disk data contract (memory.json shape, required frontmatter, `cortex.yaml` keys, distilled layout) | upgrade-safety checks and migrations only |
+| **Schema version** (integer, e.g. `1`) | `SCHEMA_VERSION` | The on-disk data contract (memory.json shape, required frontmatter, `cortex.yaml` keys, encoded layout) | upgrade-safety checks and migrations only |
 
 The two are decoupled on purpose: a PATCH release can never silently break your
 data, and a MAJOR release does not have to bump the schema.
@@ -53,17 +53,18 @@ PATCH-only changes (bug/doc/refactor, no user-visible effect) may accumulate und
 - [ ] `VERSION` bumped (and `SCHEMA_VERSION` if schema changed)
 - [ ] CHANGELOG `[Unreleased]` promoted to `[x.y.z] — YYYY-MM-DD`
 - [ ] MCP rebuilt so `package.json` matches (`cd mcp/cortex && npm run build`)
-- [ ] live install redeployed (`./deploy.sh --apply`) and agent restarted
+- [ ] live install redeployed (`cortex install --upgrade`) and agent restarted
 
 ### When to bump the schema version
 
 Increment `SCHEMA_VERSION` by **+1** whenever the on-disk contract changes, and add
-a migration entry in `distill.py`'s `MIGRATIONS` registry for the new step.
-Migrations must be idempotent and only touch `_sync/` contents — never user notes.
+a migration entry in `cortex/encoder/core.py`'s `MIGRATIONS` registry for the new
+step. Migrations must be idempotent and only touch `_sync/` contents — never user
+notes.
 
 ### Upgrading safely
 
-`distill.py` compares the code's `SCHEMA_VERSION` against the `schema_version`
+`cortex encode` compares the code's `SCHEMA_VERSION` against the `schema_version`
 stamped in the vault's `memory.json` on every run:
 
 - **equal / fresh vault** → proceed.
@@ -73,19 +74,19 @@ stamped in the vault's `memory.json` on every run:
 Check status any time with:
 
 ```bash
-python3 distill.py --config <vault>/_sync/cortex.yaml --check
+cortex encode --config <vault>/_sync/cortex.yaml --check
 ```
 
 ### Reverting Cortex
 
-`setup.sh` and `cortex-import.py` write install manifests to
-`<vault>/_sync/backups/`. `cortex-uninstall.py` reads them to restore modified
+`cortex install` writes install manifests to
+`<vault>/_sync/backups/`. `cortex uninstall` reads them to restore modified
 files and delete created ones, returning the machine to its pre-Cortex state.
 Your vault notes are always kept.
 
 ```bash
-python3 cortex-uninstall.py --vault <vault> --latest          # preview
-python3 cortex-uninstall.py --vault <vault> --latest --apply  # revert
+cortex uninstall --vault <vault> --latest          # preview
+cortex uninstall --vault <vault> --latest --apply  # revert
 ```
 
 ---

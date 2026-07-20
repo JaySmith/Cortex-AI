@@ -116,7 +116,7 @@ Notes are excluded from hub sync if:
 2. `tier: vault-only` and not in `replicate_tiers` — excluded by default
 3. `hive` omitted — use `replicate_tiers` from `cortex.yaml` config
 
-See `hive_eligible()` in `distill.py` for the exact logic.
+See `hive_eligible()` in `cortex/encoder/core.py` for the exact logic.
 
 ## Version History
 

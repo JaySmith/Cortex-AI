@@ -25,7 +25,7 @@ reaches the assistant. Its guiding principle:
 
 The primary way knowledge gets in is the assistant itself. As you work, it
 captures what matters — a preference, a decision, a pattern — writing notes
-straight into the vault and re-distilling automatically. The notes are plain
+straight into the vault and re-encoding automatically. The notes are plain
 Markdown, so you can open the vault in any editor to review or refine by hand.
 
 Instead of dumping everything into context on every request, Cortex keeps the
@@ -53,7 +53,7 @@ your-vault/
 
 ### 2. The Build Pipeline — where it gets organized
 
-The distiller reads every note and routes it to the right destination based
+The encoder reads every note and routes it to the right destination based
 on its tier. You run it whenever you change something — or the agent triggers
 it automatically after writing a note. No database, no cloud service, no
 background daemon.
@@ -67,7 +67,7 @@ Every note declares a **tier** that controls when it reaches your assistant:
 | `core` | Eager — always loaded | Preferences, personas, standing rules |
 | `skill:<name>` | Lazy — loaded only when that skill runs | Heavy reference docs, checklists |
 | `project` | Lazy — loaded on demand | Project goals, status, roadmap |
-| `vault-only` | Never distilled | Session notes, drafts, research |
+| `vault-only` | Never encoded | Session notes, drafts, research |
 
 The always-on layer also includes a lightweight *index* — a table of
 contents telling the assistant what else exists, so it knows what it *could*
@@ -82,7 +82,7 @@ The agent exposes search tools mid-conversation:
 | **Search** | Keyword lookup across all notes |
 | **Get** | Fetch one note in full by its stable name |
 | **Related** | Find notes connected to a given one by shared tags and category |
-| **Write** | Create or update a note from inside a conversation, then re-distill |
+| **Write** | Create or update a note from inside a conversation, then re-encode |
 
 The write tool closes the loop: the assistant can capture what it learns
 mid-session without you leaving the conversation.
@@ -96,12 +96,12 @@ and nothing hidden.
 
 | Command | What it does |
 |---------|-------------|
-| `cortex distill` | Rebuild every distilled output from the current vault |
-| `cortex distill --list` | List every note with its tier — the transparency view |
-| `cortex distill --dry-run` | Preview what would change without writing |
-| `cortex distill --check` | Release + schema health verdict |
+| `cortex encode` | Rebuild every encoded output from the current vault |
+| `cortex encode --list` | List every note with its tier — the transparency view |
+| `cortex encode --dry-run` | Preview what would change without writing |
+| `cortex encode --check` | Release + schema health verdict |
 | `cortex status` | Installation health check |
-| `cortex memory search <query>` | Search distilled memory from the CLI |
+| `cortex memory search <query>` | Search encoded memory from the CLI |
 
 ---
 
@@ -114,23 +114,23 @@ Cortex tracks **two independent numbers**:
 | Release version (SemVer) | `VERSION` | The human-facing release number |
 | Schema version (integer) | `SCHEMA_VERSION` | The on-disk data contract |
 
-**Every run is upgrade-safe.** Before doing anything, the distiller compares
+**Every run is upgrade-safe.** Before doing anything, the encoder compares
 the code's schema version against the one in your vault:
 
 - **Equal (or fresh vault)** — proceed normally.
 - **Code newer** — auto-back up, run any migrations, proceed.
 - **Code older than vault** — refuse to run (no silent downgrades).
 
-Check status any time with `cortex distill --check` or `cortex status`.
+Check status any time with `cortex encode --check` or `cortex status`.
 
 ---
 
 ## Installing, Upgrading, Reverting
 
 - **Fresh install** — `cortex bootstrap` + `cortex install` handles
-  everything: venv, deps, config, distiller, skill, first distill.
+  everything: venv, deps, config, encoder, skill, first encode.
 - **Upgrading** — `cortex install --upgrade` backs up every target first,
-  deploys updated files, re-distills, and verifies versions.
+  deploys updated files, re-encodes, and verifies versions.
 - **Reverting** — `cortex uninstall` reads install manifests to restore
   modified files and remove created ones. Notes are always kept.
 

@@ -11,12 +11,12 @@ surface.
   `~/.config/opencode/skills/`.
 - **Read the live install ONLY when:**
   1. The user explicitly asks about the live/deployed state, OR
-  2. We are running or verifying a deployment (`setup.sh` / `deploy.sh`), OR
+  2. We are running or verifying a deployment (`cortex install`), OR
   3. We are diagnosing a bug that only reproduces in the deployed environment.
 
 ### Why
 
-`skills/` holds the canonical templates. `setup.sh` and `deploy.sh` render them
+`skills/` holds the canonical templates. `cortex install` renders them
 into `~/.config/opencode/skills/`, injecting machine-specific paths. The deployed
 copies drift and accumulate sediment. Reasoning about the live install during
 design work means reasoning about stale, personalized artifacts instead of the
@@ -30,9 +30,8 @@ If it's ambiguous whether a request is about the repo or the live install, assum
 ## Layout
 
 - `skills/` — canonical skill templates (source of truth for skills)
-- `distill.py`, `hive_client.py`, `cortex-*.py` — Python tooling
+- `cortex/` — Python package (CLI, encoder, config, platforms, templates)
 - `mcp/cortex/` — MCP server (TypeScript, built to `build/`)
-- `setup.sh` — fresh bootstrap; `deploy.sh` — upgrade an existing install
 - `tests/` — pytest suite (`conftest.py` copies `example-vault` into tmp)
 - `docs/` — conventions and schema references
 
@@ -40,4 +39,4 @@ If it's ambiguous whether a request is about the repo or the live install, assum
 
 - **Test:** `pytest`
 - **Build MCP:** `cd mcp/cortex && npm run build`
-- **Distill:** `python3 distill.py --config <cortex.yaml>`
+- **Encode:** `cortex encode --config <vault>/_sync/cortex.yaml`

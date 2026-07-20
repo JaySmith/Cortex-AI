@@ -1,7 +1,7 @@
 # Memory Model
 
 Cortex is a persistent, tiered memory system for AI agents. Notes live in a
-plain-Markdown vault. A distillation pipeline reads every note and routes it
+plain-Markdown vault. An encoding pipeline reads every note and routes it
 to the right output based on its **tier** — so the agent loads only what it
 needs, when it needs it.
 
@@ -56,9 +56,9 @@ a table of contents that tells the agent what skill and project notes exist,
 without loading their content. This lets the agent reason about available
 knowledge and pull in detail when relevant.
 
-### Distillation
+### Encoding
 
-The distiller (`distill.py`, invoked via `cortex distill`) reads every note
+The encoder (`cortex/encoder/core.py`, invoked via `cortex encode`) reads every note
 in the vault and routes it to output targets based on tier:
 
 ```
@@ -82,13 +82,13 @@ The everyday workflow is **capture first, rebuild second**:
 1. **Capture** — the agent writes notes into the vault during conversation
    (preferences, decisions, patterns, session summaries). Individual writes
    trigger an automatic rebuild in the background.
-2. **Rebuild** — `cortex distill` regenerates all distilled outputs from the
+2. **Rebuild** — `cortex encode` regenerates all encoded outputs from the
    current vault state. This is the explicit step you run after a batch of
    manual edits.
 
 A "sync" is this two-step process. The rebuild without capture is just a
 rebuild — it re-emits what's already there. The capture without a rebuild
-leaves the distilled outputs stale.
+leaves the encoded outputs stale.
 
 ## Scoring
 
@@ -101,7 +101,7 @@ predict what will come back.
 ## Vault-Only Notes
 
 `vault-only` is a deliberate feature. A note in this tier can be written by
-the agent but is never distilled back into its context. This gives you:
+the agent but is never encoded back into its context. This gives you:
 
 - **Signal filtering** — the agent captures observations without them
   becoming established fact on the next turn. You review and promote the
@@ -113,7 +113,7 @@ the agent but is never distilled back into its context. This gives you:
   bloating the always-loaded budget.
 
 `session` and `log` note types default to this tier. Promote a note later by
-changing its `tier` and re-distilling.
+changing its `tier` and re-encoding.
 
 ## Versioning
 
@@ -124,7 +124,7 @@ Cortex tracks two independent numbers:
 | Release version (SemVer) | `VERSION` | Which release of the toolchain |
 | Schema version (integer) | `SCHEMA_VERSION` | The on-disk data contract |
 
-Every distill run compares the code's schema version against the vault's. If
-the vault is newer, the distiller refuses to run (no silent downgrades). If
+Every encode run compares the code's schema version against the vault's. If
+the vault is newer, the encoder refuses to run (no silent downgrades). If
 the code is newer, it auto-migrates (backing up first). Check status with
-`cortex distill --check` or `cortex status`.
+`cortex encode --check` or `cortex status`.

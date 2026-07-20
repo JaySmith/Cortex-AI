@@ -1,7 +1,7 @@
 """Hive — lightweight MCP-over-HTTP client for cortex-hub.
 
 Speaks the hub's StreamableHTTP protocol using only stdlib. Used by
-the distiller for --hive-push / --hive-pull / --hive-status, and by the
+the encoder for --hive-push / --hive-pull / --hive-status, and by the
 MCP server for real-time hive proxying.
 
 Protocol:

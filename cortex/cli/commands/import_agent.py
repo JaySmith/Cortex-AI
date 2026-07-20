@@ -4,7 +4,7 @@ cortex.cli.commands.import_agent — Onboard an existing agent into a Cortex vau
 
 Two jobs:
   1. BACKUP  — snapshot any agent config Cortex will later modify
-               (e.g. opencode.jsonc, whose "instructions" the distiller rewrites),
+               (e.g. opencode.jsonc, whose "instructions" the encoder rewrites),
                plus copies of everything it imports, into a timestamped folder.
   2. IMPORT  — read what your agent already knows and seed the vault with it:
                  - AGENTS.md / CLAUDE.md instruction files
@@ -15,7 +15,7 @@ Every imported item becomes a vault note with:
     type: feedback
     tier: core
     tags: [imported, review]
-so it flows into core-context.md on the next distill. The `review` tag is a
+so it flows into core-context.md on the next encode. The `review` tag is a
 reminder to curate tiers/types afterward — nothing is auto-classified by guesswork.
 """
 
@@ -309,7 +309,7 @@ def run_import(
     if total and not dry_run:
         print("Next steps:")
         print("  1. Review notes tagged 'review' in {dest} and adjust type/tier.")
-        print(f"  2. Re-distill:  cortex distill --config {vault / '_sync' / 'cortex.yaml'}")
+        print(f"  2. Re-encode:  cortex encode --config {vault / '_sync' / 'cortex.yaml'}")
 
     return total
 

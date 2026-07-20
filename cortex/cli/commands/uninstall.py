@@ -2,7 +2,7 @@
 """
 cortex.cli.commands.uninstall — Revert a machine to its pre-Cortex state.
 
-Reads the install/import manifests that setup.sh and cortex-import.py leave in
+Reads the install manifests that `cortex install` leaves in
 <vault>/_sync/backups/ and undoes what Cortex added:
 
   - `created` files/dirs  -> deleted
@@ -19,7 +19,7 @@ Usage:
   cortex uninstall --vault /path/to/vault --latest --apply  # do it
   cortex uninstall --vault /path/to/vault --backup 20260710-152233-setup --apply
   cortex uninstall --vault /path/to/vault --latest --apply --purge
-      # also wipe _sync/distilled (a truly clean slate; notes still kept)
+      # also wipe _sync/encoded (a truly clean slate; notes still kept)
 """
 
 from __future__ import annotations
@@ -109,15 +109,15 @@ def process_manifest(manifest_path: Path, apply: bool) -> None:
             delete_created(a, apply)
 
 
-def purge_distilled(vault: Path, apply: bool) -> None:
-    distilled = vault / "_sync" / "distilled"
-    if not distilled.exists():
+def purge_encoded(vault: Path, apply: bool) -> None:
+    encoded = vault / "_sync" / "encoded"
+    if not encoded.exists():
         return
     if not apply:
-        print(f"\n[DRY] --purge would delete {distilled}")
+        print(f"\n[DRY] --purge would delete {encoded}")
         return
-    shutil.rmtree(distilled)
-    print(f"\npurged {distilled}")
+    shutil.rmtree(encoded)
+    print(f"\npurged {encoded}")
 
 
 def run_uninstall(
@@ -144,13 +144,13 @@ def run_uninstall(
         process_manifest(m, apply)
 
     if purge:
-        purge_distilled(vault, apply)
+        purge_encoded(vault, apply)
 
     print()
     if apply:
         print("Done. Cortex plumbing removed; your notes remain in the vault.")
         print("You may also want to remove the MCP 'cortex' entry from your agent config,")
-        print("and delete the cloned cortex-distiller repo if you no longer need it.")
+        print("and delete the cloned cortex-encoder repo if you no longer need it.")
     else:
         print("Dry-run complete. Re-run with --apply to make these changes.")
 
@@ -186,7 +186,7 @@ def main() -> None:
     ap.add_argument(
         "--purge",
         action="store_true",
-        help=("Also delete _sync/distilled (generated output). Notes are still kept."),
+        help=("Also delete _sync/encoded (generated output). Notes are still kept."),
     )
     args = ap.parse_args()
 

@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- **Python 3.10+** — the distiller uses modern type-hint syntax (`str | None`)
+- **Python 3.10+** — the encoder uses modern type-hint syntax (`str | None`)
 - **git**
 
 No other dependencies. `cortex bootstrap` creates a venv and installs everything.
@@ -13,16 +13,15 @@ No other dependencies. `cortex bootstrap` creates a venv and installs everything
 git clone https://github.com/JaySmith/Cortex-AI.git cortex-ai
 cd cortex-ai
 cortex bootstrap          # create venv + install deps
-cortex install            # set up config, distiller, skill (interactive)
+cortex install            # set up config, encoder, skill (interactive)
 ```
 
 `cortex install` prompts for your **vault path** (press Enter to accept the
 default — the bundled example vault). It then:
 
 1. Creates `cortex.yaml` in `<vault>/_sync/` (if not already present)
-2. Deploys the distiller scripts to `<vault>/_sync/`
-3. Runs a first distillation to generate `<vault>/_sync/distilled/`
-4. Installs the `cortex-ai` skill into `~/.config/opencode/skills/`
+2. Runs a first encoding to generate `<vault>/_sync/encoded/`
+3. Installs the `cortex-ai` skill into `~/.config/opencode/skills/`
 
 ## Non-Interactive Install
 
@@ -39,9 +38,7 @@ This is suitable for scripts, CI, or automation.
 | Asset | Location |
 |-------|----------|
 | Config | `<vault>/_sync/cortex.yaml` |
-| Distiller | `<vault>/_sync/distill.py`, `hive_client.py`, `cortex-import.py`, `cortex-uninstall.py` |
-| Version files | `<vault>/_sync/VERSION`, `<vault>/_sync/SCHEMA_VERSION`, `<vault>/_sync/CHANGELOG.md` |
-| Distilled output | `<vault>/_sync/distilled/` |
+| Encoded output | `<vault>/_sync/encoded/` |
 | Skill | `~/.config/opencode/skills/cortex-ai/SKILL.md` |
 
 `cortex install` records a manifest under `<vault>/_sync/backups/` so
@@ -50,7 +47,7 @@ This is suitable for scripts, CI, or automation.
 ## Verifying the Install
 
 ```bash
-cortex status           # checks config, vault, distilled output, skill
+cortex status           # checks config, vault, encoded output, skill
 cortex doctor           # validates all platform integrations
 cortex version          # print release + schema version
 ```
@@ -64,16 +61,16 @@ git pull
 cortex install --upgrade /path/to/your/vault
 ```
 
-This backs up existing files, deploys updated distiller and skill, and
-re-distills. The version guard refuses to downgrade a vault whose schema is
+This backs up existing files, deploys updated encoder and skill, and
+re-encodes. The version guard refuses to downgrade a vault whose schema is
 newer than the code.
 
 Options:
 
 | Flag | Effect |
 |------|--------|
-| `--upgrade` | Enable upgrade mode (backup-first, re-distill) |
-| `--no-distill` | Skip re-distillation after deploy |
+| `--upgrade` | Enable upgrade mode (backup-first, re-encode) |
+| `--no-encode` | Skip re-encoding after deploy |
 | `--dry-run` | Preview what would change without writing |
 
 ## Uninstalling
@@ -85,7 +82,7 @@ cortex uninstall --vault /path/to/your/vault --latest          # preview
 cortex uninstall --vault /path/to/your/vault --latest --apply  # revert
 ```
 
-Use `--purge` to also remove `<vault>/_sync/distilled/` (the generated output).
+Use `--purge` to also remove `<vault>/_sync/encoded/` (the generated output).
 Notes in the vault are never deleted.
 
 ## Troubleshooting
@@ -124,10 +121,10 @@ git pull
 cortex install --upgrade /path/to/your/vault
 ```
 
-### Config not found by distill
+### Config not found by encode
 
-If `cortex distill` can't find the config, pass it explicitly:
+If `cortex encode` can't find the config, pass it explicitly:
 
 ```bash
-cortex distill --config /path/to/your/vault/_sync/cortex.yaml
+cortex encode --config /path/to/your/vault/_sync/cortex.yaml
 ```

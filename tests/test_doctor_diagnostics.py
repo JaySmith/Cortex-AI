@@ -18,7 +18,7 @@ class TestDoctorHealthy:
         sync = vault / "_sync"
         sync.mkdir()
         (sync / "cortex.yaml").write_text("vault_path: .")
-        distilled = sync / "distilled"
+        distilled = sync / "encoded"
         distilled.mkdir()
         (distilled / "memory.json").write_text('{"notes": {}, "_meta": {"schema_version": 2}}')
 

@@ -1,6 +1,6 @@
 """Config loading for the Cortex vault.
 
-Shared by the distiller and CLI commands. Loads cortex.yaml and applies
+Shared by the encoder and CLI commands. Loads cortex.yaml and applies
 defaults for optional blocks (hive, targets, etc.).
 """
 

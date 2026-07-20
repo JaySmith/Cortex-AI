@@ -4,7 +4,7 @@ How to add new targets, output formats, and integrations.
 
 ## Architecture Overview
 
-The distiller follows a simple flow:
+The encoder follows a simple flow:
 
 ```
 scan_vault() 
@@ -15,11 +15,6 @@ scan_vault()
     ├─ sync_python_agents()     (structured JSON)
     └─ your_custom_sync()       (new target)
 ```
-
-Each `sync_*` function:
-1. Reads the `notes` list (filtered by tier/type/tags)
-2. Formats them for the target audience
-3. Calls `write_file()` to persist (respecting --dry-run)
 
 ## Adding a New Target
 
@@ -44,7 +39,7 @@ targets:
 
 ### 2. Write the Sync Function
 
-In `distill.py`, add a new function:
+In `cortex/encoder/core.py`, add a new function:
 
 ```python
 def sync_my_framework(notes, cfg, strip_links, dry):
@@ -91,7 +86,7 @@ if mf.get("enabled"):
 ### 4. Test
 
 ```bash
-python3 distill.py --dry-run
+cortex encode --dry-run
 ```
 
 You should see:
@@ -104,7 +99,7 @@ You should see:
 Run for real:
 
 ```bash
-python3 distill.py
+cortex encode
 ```
 
 ## Filtering Patterns
@@ -283,11 +278,11 @@ The `write_file()` helper:
 
 ## State Tracking
 
-The distiller saves `_sync/last-sync.json` after each run. Use it for:
+The encoder saves `_sync/last-sync.json` after each run. Use it for:
 
 - Detecting changed notes (compare hashes)
 - Incremental syncs
-- Debugging what was distilled
+- Debugging what was encoded
 
 ```python
 # Example: read last sync state
@@ -310,8 +305,7 @@ mkdir -p _sync knowledge feedback
 Add a few notes with frontmatter, then:
 
 ```bash
-# Copy distiller & config
-cp /path/to/distill.py _sync/
+# Copy config
 cp /path/to/cortex.yaml.example _sync/cortex.yaml
 
 # Edit cortex.yaml:
@@ -319,18 +313,18 @@ vault_path: "."
 targets:
   my-framework:
     enabled: true
-    output_dir: "./distilled"
+    output_dir: "./encoded"
 
 # Test
-python3 _sync/distill.py --dry-run
-python3 _sync/distill.py
+cortex encode --config _sync/cortex.yaml --dry-run
+cortex encode --config _sync/cortex.yaml
 ```
 
 ## Common Extensions
 
 ### 1. Slack Export
 
-Distill notes into Slack messages:
+Encode notes into Slack messages:
 
 ```python
 def sync_slack(notes, cfg, strip_links, dry):
@@ -396,6 +390,5 @@ def sync_elasticsearch(notes, cfg, strip_links, dry):
 ## Questions?
 
 Check:
-- `distill.py` — the reference implementation
+- `cortex/encoder/core.py` — the reference implementation
 - `cortex.yaml.example` — all target types
-- `gen-portfolio.py` — another example of vault scanning + output

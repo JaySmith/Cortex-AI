@@ -1,13 +1,13 @@
 # Cortex
 
 Persistent, tiered memory for AI coding agents. Notes live in an
-Obsidian-style vault; Cortex distills them into agent-consumable files so
+Obsidian-style vault; Cortex encodes them into agent-consumable files so
 your agent shows up to every conversation already knowing your preferences,
 patterns, and projects.
 
 ```
-Build   (vault -> agent):  notes  -> cortex distill -> core-context.md + memory.json
-Capture (agent -> vault):  agent  -> memory write   -> note written -> distill (auto)
+Build   (vault -> agent):  notes  -> cortex encode  -> core-context.md + memory.json
+Capture (agent -> vault):  agent  -> memory write   -> note written -> encode (auto)
 ```
 
 ## Install
@@ -33,9 +33,9 @@ cortex install /path/to/your/vault
 ```bash
 cortex status                                    # verify install
 cortex memory write --title "My Stack" --type feedback --tier core
-cortex distill                                   # rebuild output
+cortex encode                                   # rebuild output
 cortex memory search "stack"                     # search memory
-cortex distill --list                            # see all notes + tiers
+cortex encode --list                            # see all notes + tiers
 ```
 
 ## Common Commands
@@ -45,13 +45,13 @@ cortex distill --list                            # see all notes + tiers
 | `cortex install [vault]` | Set up Cortex for a vault |
 | `cortex install --upgrade` | Upgrade an existing install |
 | `cortex uninstall --vault <v>` | Revert installed assets (notes kept) |
-| `cortex distill` | Rebuild all distilled output |
-| `cortex distill --dry-run` | Preview without writing |
-| `cortex distill --list` | List every note with tier/type |
-| `cortex distill --check` | Version/schema health check |
+| `cortex encode` | Rebuild all encoded output |
+| `cortex encode --dry-run` | Preview without writing |
+| `cortex encode --list` | List every note with tier/type |
+| `cortex encode --check` | Version/schema health check |
 | `cortex status` | Installation health |
 | `cortex doctor` | Validate all platform integrations |
-| `cortex memory search <q>` | Search distilled memory |
+| `cortex memory search <q>` | Search encoded memory |
 | `cortex memory write` | Create a vault note |
 | `cortex import` | Import existing agent context |
 | `cortex version` | Print version info |
@@ -65,7 +65,7 @@ Each note declares a **tier** that controls when it reaches your agent:
 | `core` | Eager — always loaded | Preferences, personas, standing rules |
 | `skill:<name>` | Lazy — loaded only when that skill runs | Heavy reference docs, checklists |
 | `project` | Lazy — loaded on demand | Project goals, status, roadmap |
-| `vault-only` | Never distilled | Session notes, drafts, research |
+| `vault-only` | Never encoded | Session notes, drafts, research |
 
 The always-loaded context also includes a **pointer index** — a table of
 contents telling the agent what skill and project notes exist without loading
@@ -78,10 +78,10 @@ The agent gets these tools for mid-conversation memory operations:
 
 | Tool | Kind | Does |
 |------|------|------|
-| `memory_search` | read | Keyword search across distilled notes |
+| `memory_search` | read | Keyword search across encoded notes |
 | `memory_get` | read | Fetch one note by id |
 | `memory_related` | read | Notes related by shared tags + category |
-| `memory_write` | write | Create/update a note, then auto-distill |
+| `memory_write` | write | Create/update a note, then auto-encode |
 | `memory_reload` | admin | Force-reload the index |
 
 ## Supported Agents
@@ -99,8 +99,7 @@ VERSION                    Release version (SemVer)
 SCHEMA_VERSION             On-disk data contract version
 CHANGELOG.md               Release history + versioning rules
 ROADMAP.md                 Planned direction
-distill.py                 Build pipeline (vault -> agent files)
-cortex/                    Python package (CLI, distiller, platforms)
+cortex/                    Python package (CLI, encoder, platforms)
 skills/cortex-ai/          opencode skill template
 example-vault/             Starter vault — one note per tier
 docs/                      overview, QUICKSTART, CLI reference, etc.
@@ -111,7 +110,7 @@ docs/                      overview, QUICKSTART, CLI reference, etc.
 - [docs/overview.md](docs/overview.md) — what Cortex is and how it works
 - [docs/installation.md](docs/installation.md) — installation guide
 - [docs/cli-reference.md](docs/cli-reference.md) — CLI reference
-- [docs/memory-model.md](docs/memory-model.md) — tier system, note types, distillation
+- [docs/memory-model.md](docs/memory-model.md) — tier system, note types, encoding
 - [docs/QUICKSTART.md](docs/QUICKSTART.md) — minimal productive path
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) — contributing: dev setup, dev loop, releasing
 - [docs/troubleshooting.md](docs/troubleshooting.md) — common issues and fixes
