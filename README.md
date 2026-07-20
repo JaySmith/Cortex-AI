@@ -32,7 +32,11 @@ cortex install /path/to/your/vault
 To update after a new release:
 
 ```bash
-uv tool install --reinstall cortex-ai
+# 1. Update the CLI
+uv tool install --reinstall git+https://github.com/JaySmith/Cortex-AI.git
+
+# 2. Update vault assets (skill + re-encode)
+cortex install --upgrade
 ```
 
 ## Quick Start
