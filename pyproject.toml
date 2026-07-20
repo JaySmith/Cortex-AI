@@ -25,7 +25,7 @@ cortex = "cortex.cli.main:main"
 include = ["cortex", "cortex.*"]
 
 [tool.setuptools.package-data]
-cortex = ["templates/**/*"]
+cortex = ["templates/**/*", "SKILL.md"]
 
 [build-system]
 requires = ["setuptools>=64"]

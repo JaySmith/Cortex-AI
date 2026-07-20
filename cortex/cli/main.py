@@ -68,6 +68,27 @@ for _pname in ("opencode", "codex", "copilot"):
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
+def _skill_src() -> Path | None:
+    """Find the skill template file, wherever the package is installed."""
+    # 1. CORTEX_SKILL_DIR env var
+    if "CORTEX_SKILL_DIR" in os.environ:
+        p = Path(os.environ["CORTEX_SKILL_DIR"]) / "cortex-ai" / "SKILL.md"
+        if p.exists():
+            return p
+    # 2. Repo layout (dev install, git clone)
+    p = _REPO_ROOT / "skills" / "cortex-ai" / "SKILL.md"
+    if p.exists():
+        return p
+    # 3. Bundled in the package (uv tool install, pip install)
+    try:
+        from importlib.resources import files as _files
+
+        return _files("cortex").joinpath("SKILL.md")  # type: ignore[return-value]
+    except Exception:
+        pass
+    return None
+
+
 def _error(what: str, why: str, fix: str) -> None:
     """Print a structured error message."""
     typer.echo(f"\n  What failed:\n    {what}\n", err=True)
@@ -388,8 +409,8 @@ def install(
                 (opencode_skills_dir / m.group(1)).mkdir(parents=True, exist_ok=True)
 
     # Install skill
-    skill_src = repo_root / "skills" / "cortex-ai" / "SKILL.md"
-    if skill_src.exists():
+    skill_src = _skill_src()
+    if skill_src is not None and skill_src.exists():
         skill_dest_dir = opencode_skills_dir / "cortex-ai"
         skill_dest = skill_dest_dir / "SKILL.md"
         if dry_run:
