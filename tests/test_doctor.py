@@ -1,0 +1,70 @@
+"""Tests for cortex doctor command."""
+
+from pathlib import Path
+
+from typer.testing import CliRunner
+
+from cortex.cli.main import app
+
+runner = CliRunner()
+
+
+class TestDoctor:
+    def test_doctor_healthy(self, tmp_path, monkeypatch):
+        """Doctor reports healthy when all pieces exist."""
+        # Set up a minimal vault
+        vault = tmp_path / "vault"
+        sync_dir = vault / "_sync"
+        sync_dir.mkdir(parents=True)
+        (sync_dir / "cortex.yaml").write_text("vault_path: /tmp/vault\n")
+        distilled = sync_dir / "distilled"
+        distilled.mkdir()
+        (distilled / "memory.json").write_text('{"notes": {}}')
+
+        # Set up skill file in the expected location under monkeypatched home
+        skills_dir = tmp_path / ".config" / "opencode" / "skills" / "cortex-ai"
+        skills_dir.mkdir(parents=True)
+        (skills_dir / "SKILL.md").write_text(
+            "<!-- BEGIN CORTEX MANAGED BLOCK -->\nskill content\n<!-- END CORTEX MANAGED BLOCK -->"
+        )
+
+        # Monkeypatch home and paths
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+        result = runner.invoke(app, ["doctor", "--vault", str(vault)])
+        assert result.exit_code == 0
+        assert "HEALTHY" in result.output
+
+    def test_doctor_needs_attention(self, tmp_path, monkeypatch):
+        """Doctor reports issues when pieces are missing."""
+        vault = tmp_path / "vault"
+        vault.mkdir()
+        # No _sync/cortex.yaml, no memory.json, no skill
+
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+        result = runner.invoke(app, ["doctor", "--vault", str(vault)])
+        assert result.exit_code == 0
+        assert "NEEDS ATTENTION" in result.output
+
+    def test_doctor_specific_platform(self, tmp_path, monkeypatch):
+        """Doctor with --platform checks only that platform."""
+        vault = tmp_path / "vault"
+        sync_dir = vault / "_sync"
+        sync_dir.mkdir(parents=True)
+        (sync_dir / "cortex.yaml").write_text("vault_path: /tmp/vault\n")
+        distilled = sync_dir / "distilled"
+        distilled.mkdir()
+        (distilled / "memory.json").write_text('{"notes": {}}')
+
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+        result = runner.invoke(app, ["doctor", "--vault", str(vault), "--platform", "opencode"])
+        assert result.exit_code == 0
+        assert "opencode" in result.output.lower()
+
+    def test_doctor_unknown_platform(self, tmp_path):
+        """Doctor with unknown platform exits with error."""
+        result = runner.invoke(app, ["doctor", "--platform", "nonexistent"])
+        assert result.exit_code == 1
+        assert "Unknown platform" in result.output

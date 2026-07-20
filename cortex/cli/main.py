@@ -50,6 +50,15 @@ memory_app = typer.Typer(
 )
 app.add_typer(memory_app, name="memory")
 
+# Platform subcommands — one Typer per platform
+platform_apps: dict[str, typer.Typer] = {}
+for _pname in ("opencode", "codex", "copilot"):
+    _plat = typer.Typer(
+        name=_pname, help=f"Manage Cortex integration with {_pname}", no_args_is_help=True
+    )
+    platform_apps[_pname] = _plat
+    app.add_typer(_plat, name=_pname)
+
 
 # ---------------------------------------------------------------------------
 # helpers
@@ -845,6 +854,152 @@ def write(
     if tag_list:
         typer.echo(f"  tags: {tag_list}")
     typer.echo("\nRun 'cortex distill' to rebuild distilled output.")
+
+
+# ---------------------------------------------------------------------------
+# Platform commands: cortex <platform> install/uninstall/status
+# ---------------------------------------------------------------------------
+
+
+def _build_context(vault: str | None, dry_run: bool = False):
+    """Build an InstallContext from CLI args."""
+    from cortex.platforms.base import InstallContext
+
+    vault_path = Path(vault) if vault else _find_vault()
+    config_path = vault_path / "_sync" / "cortex.yaml"
+    skills_dir = Path.home() / ".config" / "opencode" / "skills"
+    return InstallContext(
+        repo_root=_REPO_ROOT,
+        vault_root=vault_path,
+        config_path=config_path,
+        skills_dir=skills_dir,
+        dry_run=dry_run,
+    )
+
+
+def _add_platform_commands(platform_name: str) -> None:
+    """Register install/uninstall/status commands on a platform's Typer app."""
+    from cortex.platforms.registry import get_installer
+
+    plat_app = platform_apps[platform_name]
+    installer = get_installer(platform_name)
+    if installer is None:
+        return
+
+    @plat_app.command(name="install")
+    def _install(
+        vault: str | None = typer.Option(None, "--vault", help="Vault path"),
+        dry_run: bool = typer.Option(False, "--dry-run", help="Preview without writing"),
+    ) -> None:
+        ctx = _build_context(vault, dry_run)
+        mode = "DRY-RUN" if dry_run else "APPLY"
+        typer.echo(f"==> {installer.platform_name} install [{mode}]")
+        if not installer.detect():
+            typer.echo(
+                f"WARNING: {installer.platform_name} config not detected at expected location",
+                err=True,
+            )
+        result = installer.install(ctx)
+        typer.echo(result.summary(dry_run))
+        if not dry_run and result.changed:
+            typer.echo(f"\nInstalled Cortex for {installer.platform_name}.")
+        elif dry_run and result.changed:
+            typer.echo(f"\nWould install Cortex for {installer.platform_name}.")
+
+    @plat_app.command(name="uninstall")
+    def _uninstall(
+        vault: str | None = typer.Option(None, "--vault", help="Vault path"),
+        dry_run: bool = typer.Option(False, "--dry-run", help="Preview without writing"),
+    ) -> None:
+        ctx = _build_context(vault, dry_run)
+        mode = "DRY-RUN" if dry_run else "APPLY"
+        typer.echo(f"==> {installer.platform_name} uninstall [{mode}]")
+        result = installer.uninstall(ctx)
+        typer.echo(result.summary(dry_run))
+        if result.changed:
+            typer.echo(f"\nRemoved Cortex assets for {installer.platform_name}.")
+
+    @plat_app.command(name="status")
+    def _status(
+        vault: str | None = typer.Option(None, "--vault", help="Vault path"),
+    ) -> None:
+        ctx = _build_context(vault)
+        detected = installer.detect()
+        errors = installer.validate(ctx)
+        typer.echo(f"Platform: {installer.platform_name}")
+        typer.echo(f"Detected: {'yes' if detected else 'no'}")
+        if errors:
+            for e in errors:
+                typer.echo(f"  ✗ {e}")
+            typer.echo("Status: NEEDS ATTENTION")
+        else:
+            typer.echo("Status: HEALTHY")
+
+
+for _pname in platform_apps:
+    _add_platform_commands(_pname)
+
+
+# ---------------------------------------------------------------------------
+# cortex doctor
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def doctor(
+    platform: str | None = typer.Option(None, "--platform", help="Check a specific platform only"),
+    vault: str | None = typer.Option(None, "--vault", help="Vault path"),
+) -> None:
+    """Validate Cortex installation across all platforms."""
+    from cortex.platforms.registry import get_installer, list_platforms
+
+    vault_path = Path(vault) if vault else _find_vault()
+    typer.echo("Cortex doctor\n")
+
+    # Core checks
+    typer.echo("Core")
+    config_path = vault_path / "_sync" / "cortex.yaml"
+    mem_json = vault_path / "_sync" / "distilled" / "memory.json"
+    skill_file = Path.home() / ".config" / "opencode" / "skills" / "cortex-ai" / "SKILL.md"
+
+    checks = [
+        ("Config found", config_path.exists()),
+        ("Vault found", vault_path.exists()),
+        ("Distilled memory found", mem_json.exists()),
+        ("Skill installed", skill_file.exists()),
+    ]
+    all_healthy = True
+    for label, ok in checks:
+        typer.echo(f"  {'✓' if ok else '✗'} {label}")
+        if not ok:
+            all_healthy = False
+
+    # Platform checks
+    platforms_to_check = list_platforms()
+    if platform:
+        inst = get_installer(platform)
+        if inst is None:
+            typer.echo(f"\nUnknown platform: {platform}")
+            typer.echo(f"Available: {', '.join(p.platform_name for p in list_platforms())}")
+            raise typer.Exit(code=1)
+        platforms_to_check = [inst]
+
+    for inst in platforms_to_check:
+        typer.echo(f"\n{inst.platform_name.title()}")
+        detected = inst.detect()
+        typer.echo(f"  {'✓' if detected else '○'} Detected: {'yes' if detected else 'no'}")
+        if detected:
+            ctx = _build_context(vault)
+            errors = inst.validate(ctx)
+            for e in errors:
+                typer.echo(f"  ✗ {e}")
+                all_healthy = False
+            if not errors:
+                typer.echo("  ✓ Config OK")
+
+    typer.echo(f"\nStatus: {'HEALTHY' if all_healthy else 'NEEDS ATTENTION'}")
+    if not all_healthy:
+        typer.echo("Run 'cortex <platform> install' to fix platform issues.")
 
 
 # ---------------------------------------------------------------------------
