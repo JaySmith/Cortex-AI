@@ -1,4 +1,4 @@
-"""Tests for distill.py — pure functions and VaultNote model."""
+"""Tests for distiller — pure functions and VaultNote model."""
 
 import json
 import sys
@@ -6,8 +6,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from distill import (
+from cortex.distiller.core import (
     VaultNote,
     parse_frontmatter,
     strip_wiki_links,

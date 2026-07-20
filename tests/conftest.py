@@ -20,7 +20,5 @@ def vault(tmp_path):
 @pytest.fixture
 def vault_notes(vault):
     """Scan the copied example-vault and return the note list."""
-    import sys
-    sys.path.insert(0, str(REPO_ROOT))
-    from distill import scan_vault
+    from cortex.distiller.core import scan_vault
     return scan_vault(vault, skip_dirs={"templates"})

@@ -1,4 +1,4 @@
-"""Tests for cortex-import.py — pure helpers and import logic."""
+"""Tests for cortex import — pure helpers and import logic."""
 
 import json
 import sys
@@ -6,15 +6,14 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import importlib
-_cortex_import = importlib.import_module("cortex-import")
-slugify = _cortex_import.slugify
-strip_jsonc = _cortex_import.strip_jsonc
-build_note = _cortex_import.build_note
-write_note = _cortex_import.write_note
-backup_file = _cortex_import.backup_file
-first_existing = _cortex_import.first_existing
+from cortex.cli.commands.import_agent import (
+    slugify,
+    strip_jsonc,
+    build_note,
+    write_note,
+    backup_file,
+    first_existing,
+)
 
 
 # ---------------------------------------------------------------------------
