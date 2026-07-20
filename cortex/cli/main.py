@@ -11,6 +11,7 @@ All user-facing operations consolidated behind a single CLI:
   cortex status          Show basic health of Cortex
    cortex memory search   Search encoded memory
    cortex memory get      Fetch a single note by id
+   cortex memory list     List all notes with type, tier, alias
    cortex memory write    Write a memory note to the vault
   cortex import          Import existing agent context
   cortex version         Print version information
@@ -992,12 +993,69 @@ def search(
 
     typer.echo(f"Found {len(results)} result(s) for '{query}':\n")
     for _score, nid, note in results[:20]:
-        alias = note.get("aliases", [""])[0]
+        aliases = note.get("aliases", [])
+        alias = aliases[0] if aliases else nid
         cat = note.get("category", "")
         snippet = note.get("content", "")[:80].replace("\n", " ")
         typer.echo(f"  {nid}  · {note.get('type', '?')}/{cat}  · {alias}")
         if snippet:
             typer.echo(f"    {snippet}...")
+
+
+@memory_app.command(name="list")
+def list_notes_cmd(
+    tier: str | None = typer.Option(
+        None, "--tier", help="Filter by tier (core, skill:*, project, vault-only)"
+    ),
+    note_type: str | None = typer.Option(
+        None, "--type", help="Filter by type (knowledge, entity, feedback, etc.)"
+    ),
+    vault: str | None = typer.Option(None, "--vault", help="Vault path (auto-detect by default)"),
+) -> None:
+    """List all notes in encoded memory as a table."""
+    mem_path = _find_memory_json(vault)
+    if not mem_path or not mem_path.exists():
+        _error(
+            "memory.json not found",
+            "Run 'cortex encode' to build the memory index.",
+            "If you have a vault, run: cortex encode",
+        )
+        raise typer.Exit(code=1)
+
+    try:
+        data = json.loads(mem_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        _error(f"Could not read memory.json: {e}", "", "")
+        raise typer.Exit(code=1) from e
+
+    notes = data.get("notes", {})
+    if not notes:
+        typer.echo("No notes found in memory.json.")
+        return
+
+    # Filter
+    items: list[tuple[str, dict]] = []
+    for nid, note in sorted(notes.items()):
+        if tier and note.get("tier", "") != tier:
+            continue
+        if note_type and note.get("type", "") != note_type:
+            continue
+        items.append((nid, note))
+
+    if not items:
+        typer.echo("No notes match the filter.")
+        return
+
+    typer.echo(f"\n{'ID':<30} {'Type':<14} {'Tier':<16} {'Alias'}")
+    typer.echo("-" * 80)
+    for nid, note in items:
+        aliases = note.get("aliases", [])
+        alias = aliases[0] if aliases else ""
+        ntype = note.get("type", "?")
+        ntier = note.get("tier", "?")
+        typer.echo(f"{nid:<30} {ntype:<14} {ntier:<16} {alias}")
+
+    typer.echo(f"\n{len(items)} note(s)")
 
 
 @memory_app.command()
