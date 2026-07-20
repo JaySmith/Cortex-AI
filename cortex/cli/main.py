@@ -551,7 +551,15 @@ def encode(
     ),
 ) -> None:
     """Run the vault-to-agent encoding process."""
-    cfg_path = Path(config_path) if config_path else Path.cwd() / "_sync" / "cortex.yaml"
+    cfg_path: Path
+    if config_path:
+        cfg_path = Path(config_path)
+    else:
+        vault_path = _find_vault_path(None)
+        if vault_path:
+            cfg_path = vault_path / "_sync" / "cortex.yaml"
+        else:
+            cfg_path = Path.cwd() / "_sync" / "cortex.yaml"
     rc = run_encode(
         config_path=cfg_path,
         dry_run=dry_run,
@@ -1215,30 +1223,53 @@ def _build_note_content(
 
 
 def _resolve_encode_python(vault_root: Path) -> str:
-    """Find the Python interpreter for the encoder venv (cross-platform)."""
+    """Find the Python interpreter that can run cortex.encoder.core."""
     # 1. ENCODE_PYTHON env var override
     if env_python := os.environ.get("ENCODE_PYTHON"):
         return env_python
-    # 2. Cross-platform venv detection
+    # 2. Use the same Python that's running us (uv tool, venv, etc.)
+    me = sys.executable
+    if me and _can_import_cortex(me):
+        return me
+    # 3. Cross-platform venv detection in vault's _sync
     for candidate in [
         vault_root / "_sync" / ".venv" / "bin" / "python",
         vault_root / "_sync" / ".venv" / "Scripts" / "python.exe",
     ]:
         if candidate.exists():
             return str(candidate)
-    # 3. Fallback
+    # 4. Fallback: check PATH
     for fallback in ["python3", "python"]:
-        if shutil.which(fallback):
-            return fallback
-    return "python3"
+        if shutil.which(fallback) and _can_import_cortex(shutil.which(fallback)):
+            return str(shutil.which(fallback))
+    return sys.executable or "python3"
+
+
+def _can_import_cortex(python_path: str | None) -> bool:
+    """Check if a given Python interpreter can import the cortex package."""
+    if not python_path:
+        return False
+    try:
+        result = subprocess.run(
+            [python_path, "-c", "import cortex; print('ok')"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        return result.returncode == 0 and result.stdout.strip() == "ok"
+    except Exception:
+        return False
 
 
 def _fire_encode(vault_root: Path) -> None:
     """Fire-and-forget encode after a write, so memory.json stays current."""
     python = _resolve_encode_python(vault_root)
+    config_path = vault_root / "_sync" / "cortex.yaml"
+    if not config_path.exists():
+        return  # vault not fully set up yet
     try:
         subprocess.Popen(
-            [python, "-m", "cortex.encoder.core"],
+            [python, "-m", "cortex.encoder.core", "--config", str(config_path)],
             cwd=str(vault_root),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
