@@ -1,0 +1,54 @@
+[project]
+name = "cortex-ai"
+version = "1.4.0"
+description = "Persistent, tiered memory for AI coding agents"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = [
+    "typer>=0.12",
+    "PyYAML>=6.0",
+]
+
+[project.scripts]
+cortex = "cortex.cli.main:main"
+
+[tool.setuptools.packages.find]
+include = ["cortex", "cortex.*"]
+
+[tool.setuptools.package-data]
+cortex = ["templates/**/*"]
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = true
+no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+module = [
+    "cortex.distiller.core",
+    "cortex.cli.commands.import_agent",
+    "cortex.cli.commands.uninstall",
+    "cortex.mcp.upsert",
+    "cortex.hub.client",
+]
+ignore_errors = true
