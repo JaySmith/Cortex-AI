@@ -97,14 +97,13 @@ def _error(what: str, why: str, fix: str) -> None:
 
 
 def _find_vault() -> Path:
-    """Try to find an existing vault from common locations."""
-    candidates = [
-        Path.cwd(),
-        Path.home() / "Cortex",
-    ]
-    for p in candidates:
-        sync_cfg = p / "_sync" / "cortex.yaml"
-        if sync_cfg.exists():
+    """Try to find an existing vault by scanning home for _sync/cortex.yaml."""
+    cwd = Path.cwd()
+    if (cwd / "_sync" / "cortex.yaml").exists():
+        return cwd
+    home = Path.home()
+    for p in home.iterdir():
+        if p.is_dir() and (p / "_sync" / "cortex.yaml").exists():
             return p
     return Path.cwd()
 
@@ -591,13 +590,21 @@ def status(
         if cfg.exists():
             config_file = cfg
     else:
-        # Search common locations
-        for p in [Path.cwd(), Path.home() / "Cortex"]:
-            cfg = p / "_sync" / "cortex.yaml"
-            if cfg.exists():
-                config_file = cfg
-                vault_path = p
-                break
+        # Scan cwd then home for any _sync/cortex.yaml
+        cwd = Path.cwd()
+        cfg_cwd = cwd / "_sync" / "cortex.yaml"
+        if cfg_cwd.exists():
+            config_file = cfg_cwd
+            vault_path = cwd
+        else:
+            home = Path.home()
+            for p in home.iterdir():
+                if p.is_dir():
+                    cfg = p / "_sync" / "cortex.yaml"
+                    if cfg.exists():
+                        config_file = cfg
+                        vault_path = p
+                        break
 
     if config_file and config_file.exists():
         typer.echo("Config:           found")
@@ -793,10 +800,17 @@ def _find_memory_json(vault: str | None) -> Path | None:
         if mp.exists():
             return mp
         return mp  # return path even if missing — caller handles
-    for p in [Path.cwd(), Path.home() / "Cortex"]:
-        mp = p / "_sync" / "encoded" / "memory.json"
-        if mp.exists():
-            return mp
+    # Check cwd first, then scan home
+    cwd = Path.cwd()
+    mp_cwd = cwd / "_sync" / "encoded" / "memory.json"
+    if mp_cwd.exists():
+        return mp_cwd
+    home = Path.home()
+    for p in home.iterdir():
+        if p.is_dir():
+            mp_home = p / "_sync" / "encoded" / "memory.json"
+            if mp_home.exists():
+                return mp_home
     return None
 
 
@@ -804,8 +818,13 @@ def _find_vault_path(vault: str | None) -> Path | None:
     """Locate vault root from --vault option or common locations."""
     if vault:
         return Path(vault).expanduser()
-    for p in [Path.cwd(), Path.home() / "Cortex"]:
-        if (p / "_sync" / "cortex.yaml").exists():
+    # Check cwd first, then scan home for any _sync/cortex.yaml
+    cwd = Path.cwd()
+    if (cwd / "_sync" / "cortex.yaml").exists():
+        return cwd
+    home = Path.home()
+    for p in home.iterdir():
+        if p.is_dir() and (p / "_sync" / "cortex.yaml").exists():
             return p
     return None
 
