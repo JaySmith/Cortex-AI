@@ -3,6 +3,7 @@
 ## Agent Implementation Brief
 
 ### Objective
+
 Make Cortex platform agnostic by adding dedicated installation workflows for major AI coding assistants.
 
 The goal is for a user to install Cortex into their preferred assistant with a single platform-specific command.
@@ -20,7 +21,9 @@ cortex copilot install
 
 ## Background
 
-Cortex provides persistent memory and MCP-based access for coding agents. To drive adoption, Cortex should reduce platform-specific setup friction and generate the right files/configuration for each supported assistant.
+Cortex provides persistent memory and MCP-based access for coding agents. To
+drive adoption, Cortex should reduce platform-specific setup friction and
+generate the right files/configuration for each supported assistant.
 
 This phase builds on Phase 1 CLI work and Phase 2 quality gates.
 
@@ -48,13 +51,18 @@ This phase builds on Phase 1 CLI work and Phase 2 quality gates.
 
 ## Target Platforms
 
-### Wave 1
-
-Implement first:
+### Wave 1 — full implementation
 
 ```text
 OpenCode
-Claude Code
+```
+
+### Wave 1 — framework stubs
+
+Register in the framework with a working `detect()` and an `install()` skeleton,
+but only minimal asset generation:
+
+```text
 Codex
 GitHub Copilot
 ```
@@ -64,13 +72,17 @@ GitHub Copilot
 Prepare extensible framework for:
 
 ```text
+Claude Code   (moved from Wave 1 — uses CLAUDE.md / ~/.claude flat files, not MCP JSON)
 Cursor
 Gemini CLI
 Aider
 Kilo
 ```
 
-Wave 2 does not need to be fully implemented in this phase unless time permits.
+Wave 2 does not need to be implemented in this phase. Claude Code is deferred to
+Wave 2 because its integration model (CLAUDE.md + flat memory files) differs
+enough from OpenCode's (MCP + skills) to warrant proving the framework on
+OpenCode first.
 
 ---
 
@@ -148,11 +160,23 @@ class InstallerBase(ABC):
 Implement concrete installers:
 
 ```text
-cortex/platforms/opencode.py
-cortex/platforms/claude.py
-cortex/platforms/codex.py
-cortex/platforms/copilot.py
+cortex/platforms/opencode.py   (full)
+cortex/platforms/codex.py      (stub — detect + install skeleton)
+cortex/platforms/copilot.py    (stub — detect + install skeleton)
 ```
+
+Claude Code (`cortex/platforms/claude.py`) is deferred to Wave 2.
+
+### `detect()` logic per platform
+
+`detect()` returns `True` when the platform's config directory exists:
+
+| Platform    | `detect()` returns `True` when | Wave     |
+|-------------|--------------------------------|----------|
+| OpenCode    | `~/.config/opencode/` exists   | 1 (full) |
+| Codex       | `~/.codex/` exists             | 1 (stub) |
+| Copilot     | `~/.github-copilot/` exists    | 1 (stub) |
+| Claude Code | `~/.claude/` exists            | 2        |
 
 ---
 
@@ -172,17 +196,32 @@ Project-local config
 User-global config
 ```
 
-Each generated file should include a Cortex-managed marker:
+Managed-content strategy depends on file format:
 
-```text
-<!-- BEGIN CORTEX MANAGED BLOCK -->
-...
-<!-- END CORTEX MANAGED BLOCK -->
-```
+- **Markdown files** (skills, agent instructions) use comment markers:
 
-or a format-appropriate equivalent.
+  ```text
+  <!-- BEGIN CORTEX MANAGED BLOCK -->
+  ...
+  <!-- END CORTEX MANAGED BLOCK -->
+  ```
+
+- **JSONC files** (`opencode.jsonc`) are managed via the surgical upsert logic
+  ported in Phase 1 (`cortex/mcp/upsert.py`, from `cortex-mcp-upsert.py`). No
+  comment markers are used — the upsert identifies the Cortex entry by its key
+  name (`mcp.cortex`) and replaces only that block, preserving all comments and
+  user content. Reuse this; do not hand-roll JSON markers.
 
 This makes uninstall and upgrades safer.
+
+### OpenCode installer — generated assets
+
+The OpenCode installer (Wave 1, full) generates exactly what `setup.sh` does today:
+
+1. MCP entry in `~/.config/opencode/opencode.jsonc` — via `cortex/mcp/upsert.py`
+   (surgical, comment-preserving, no markers).
+2. `~/.config/opencode/skills/cortex-ai/SKILL.md` — Markdown with the managed-block
+   markers above.
 
 ---
 
@@ -267,10 +306,6 @@ cortex opencode install
 cortex opencode uninstall
 cortex opencode status
 
-cortex claude install
-cortex claude uninstall
-cortex claude status
-
 cortex codex install
 cortex codex uninstall
 cortex codex status
@@ -281,6 +316,8 @@ cortex copilot status
 
 cortex doctor
 ```
+
+`cortex claude *` commands are deferred to Wave 2.
 
 ---
 
@@ -312,25 +349,31 @@ Phase is complete when:
 
 ```bash
 cortex opencode install --dry-run
-cortex claude install --dry-run
 cortex codex install --dry-run
 cortex copilot install --dry-run
 cortex doctor
 pytest
 ```
 
-all run successfully.
+all run successfully. (Claude Code dry-run is a Wave 2 criterion, not required here.)
 
-For at least Wave 1 platforms:
+For the OpenCode installer (Wave 1, full):
 
-- Install command exists.
-- Uninstall command exists.
+- Install command exists and generates the MCP entry + skill file.
+- Uninstall command exists and removes only Cortex-managed content.
 - Status command exists.
 - Dry-run is supported.
 - Tests validate generated files.
+
+For the Codex and Copilot stubs:
+
+- `detect()` and an `install()` skeleton exist and run under `--dry-run`.
+- Full asset generation is not required in this phase.
 
 ---
 
 ## Done Definition
 
-This phase is done when Cortex can install, uninstall, and validate its integration with multiple AI coding assistants through dedicated platform commands and safe generated configuration.
+This phase is done when Cortex can install, uninstall, and validate its
+integration with multiple AI coding assistants through dedicated platform
+commands and safe generated configuration.

@@ -3,15 +3,21 @@
 ## Agent Implementation Brief
 
 ### Objective
-Bring Cortex engineering quality to a professional, contribution-ready standard by adding formatting, linting, typing, tests, pre-commit hooks, and continuous integration.
 
-The goal is to make every change safer, easier to review, and less likely to break installation, distillation, memory operations, or MCP behavior.
+Bring Cortex engineering quality to a professional, contribution-ready standard
+by adding formatting, linting, typing, tests, pre-commit hooks, and continuous
+integration.
+
+The goal is to make every change safer, easier to review, and less likely to
+break installation, distillation, memory operations, or MCP behavior.
 
 ---
 
 ## Background
 
-Cortex is moving from script-based utility toward product-grade CLI tooling. Once Phase 1 introduces a formal package and CLI, Phase 2 adds the quality gates needed to keep the codebase stable as it grows.
+Cortex is moving from script-based utility toward product-grade CLI tooling. Once
+Phase 1 introduces a formal package and CLI, Phase 2 adds the quality gates
+needed to keep the codebase stable as it grows.
 
 This phase should prioritize:
 
@@ -109,7 +115,21 @@ warn_unused_configs = true
 disallow_untyped_defs = false
 check_untyped_defs = true
 no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+module = [
+  "cortex.distiller.core",
+  "cortex.commands.import_agent",
+  "cortex.commands.uninstall",
+  "cortex.mcp.upsert",
+  "cortex.hub.client",
+]
+ignore_errors = true
 ```
+
+The `overrides` block excludes the modules ported from the previously-untyped
+root scripts. New code (`cortex/cli`, `cortex/config`, `cortex/memory`) must be
+typed; ported modules are typed incrementally in a later pass.
 
 Initial goal:
 
@@ -119,28 +139,36 @@ Initial goal:
 - Type distillation inputs and outputs.
 - Type MCP tool request/response models where practical.
 
-Required command:
+Required command (new typed modules only; ported modules excluded via overrides):
 
 ```bash
-mypy cortex
+mypy cortex/cli cortex/config cortex/memory
 ```
 
 ---
 
 ### Pytest
 
-Create a `tests/` directory.
+Extend the **existing** `tests/` directory — do not recreate it. It already
+holds `conftest.py` and four test files (`test_distill.py`, `test_cortex_import.py`,
+`test_hive_client.py`, `test_mcp_upsert.py`) with 120+ tests.
 
-Recommended structure:
+The vault fixture already exists as `example-vault/` at repo root, copied into a
+`tmp_path` by the `vault` fixture in `conftest.py`. Reuse it — do NOT create a
+separate `tests/fixtures/sample-vault/`.
+
+Add new test files alongside the existing ones as CLI modules land:
 
 ```text
 tests/
-  test_cli.py
-  test_config.py
-  test_distill.py
-  test_memory.py
-  fixtures/
-    sample-vault/
+  conftest.py            (exists — vault + vault_notes fixtures)
+  test_distill.py        (exists)
+  test_cortex_import.py  (exists)
+  test_hive_client.py    (exists)
+  test_mcp_upsert.py     (exists)
+  test_cli.py            (new)
+  test_config.py         (new)
+  test_memory.py         (new)
 ```
 
 Minimum test coverage should include:
@@ -239,7 +267,7 @@ jobs:
         run: ruff format --check .
 
       - name: MyPy
-        run: mypy cortex
+        run: mypy cortex/cli cortex/config cortex/memory
 
       - name: Tests
         run: pytest
@@ -262,7 +290,7 @@ pip install -e ".[dev]"
 pre-commit install
 ruff check .
 ruff format .
-mypy cortex
+mypy cortex/cli cortex/config cortex/memory
 pytest
 ```
 
@@ -286,10 +314,14 @@ This phase is complete when all commands pass locally and in CI:
 ```bash
 ruff check .
 ruff format --check .
-mypy cortex
+mypy cortex/cli cortex/config cortex/memory
 pytest
 pre-commit run --all-files
 ```
+
+The MyPy gate applies only to the new typed modules (`cortex/cli`,
+`cortex/config`, `cortex/memory`). Modules ported from the legacy root scripts are
+excluded via `[[tool.mypy.overrides]]` until typed in a later pass.
 
 CI must fail if:
 
@@ -304,7 +336,7 @@ CI must fail if:
 
 1. Introduce a formatting issue and confirm `ruff format --check .` fails.
 2. Introduce an unused import and confirm `ruff check .` fails.
-3. Break a typed public interface and confirm `mypy cortex` fails.
+3. Break a typed public interface and confirm `mypy cortex/cli cortex/config cortex/memory` fails.
 4. Break a fixture distillation test and confirm `pytest` fails.
 5. Push a branch and confirm GitHub Actions runs all jobs.
 
@@ -312,4 +344,5 @@ CI must fail if:
 
 ## Done Definition
 
-This phase is done when Cortex has repeatable local quality checks and CI gates that protect the main branch from formatting, linting, typing, and test failures.
+This phase is done when Cortex has repeatable local quality checks and CI gates
+that protect the main branch from formatting, linting, typing, and test failures.

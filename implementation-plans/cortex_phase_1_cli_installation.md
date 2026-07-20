@@ -3,6 +3,7 @@
 ## Agent Implementation Brief
 
 ### Objective
+
 Transform Cortex from a collection of standalone scripts into a cohesive, installable command-line product.
 
 Current experience:
@@ -36,7 +37,9 @@ cortex-uninstall.py
 deploy.sh
 ```
 
-These scripts work, but the user experience requires the user to know which script to run and when. This phase consolidates user-facing operations behind a single `cortex` CLI.
+These scripts work, but the user experience requires the user to know which
+script to run and when. This phase consolidates user-facing operations behind a
+single `cortex` CLI.
 
 ---
 
@@ -97,6 +100,24 @@ The agent should preserve existing scripts during migration unless they can be s
 
 ---
 
+## Module Rename Map
+
+The existing root scripts use hyphens (not importable as modules) and have one
+cross-script dependency: `distill.py` does `from hive_client import ...`. Port in
+this order so imports never break:
+
+```text
+hive_client.py        → cortex/hub/client.py        (move FIRST — distill.py imports it)
+cortex-mcp-upsert.py  → cortex/mcp/upsert.py
+cortex-import.py      → cortex/commands/import_agent.py
+cortex-uninstall.py   → cortex/commands/uninstall.py
+distill.py            → cortex/distiller/core.py     (update its hive import to cortex.hub.client)
+```
+
+`gen-portfolio.py` is not user-facing plumbing and can stay a root script for now.
+
+---
+
 ## CLI Framework
 
 Use either `typer` or `click`. Prefer `typer` for readable command definitions and better help output.
@@ -106,16 +127,24 @@ Add dependency in `pyproject.toml`:
 ```toml
 [project]
 name = "cortex-ai"
-version = "0.1.0"
+version = "1.4.0"
 description = "Persistent, tiered memory for AI coding agents"
 requires-python = ">=3.10"
 dependencies = [
   "typer>=0.12",
+  "PyYAML>=6.0",
 ]
 
 [project.scripts]
 cortex = "cortex.cli.main:app"
+
+[tool.setuptools.package-data]
+cortex = ["templates/**/*", "../mcp/cortex/build/**/*"]
 ```
+
+Note: the package version continues the existing version line (`VERSION` = `1.4.0`,
+MCP server = `1.4.0`) rather than resetting to `0.1.0`. Keep `pyproject.toml` in
+sync with the `VERSION` file — read it dynamically or pin it to match.
 
 ---
 
@@ -131,9 +160,12 @@ Responsibilities:
 
 - Prompt for vault location.
 - Prompt for agent/platform location when needed.
-- Create or update Cortex config.
+- Generate `<vault>/_sync/cortex.yaml` from the `cortex.yaml.example` schema
+  (port the config-generation logic from `setup.sh`).
 - Install required Python dependencies if needed.
-- Build or validate the MCP server if applicable.
+- Copy the bundled `mcp/cortex/build/` (shipped as package data) to
+  `~/.config/opencode/mcp/cortex/`. Do not require Node at install time — the
+  build is pre-compiled and bundled.
 - Run first distillation.
 - Print next steps.
 
@@ -202,7 +234,8 @@ Purpose: show basic health of Cortex.
 
 Responsibilities:
 
-- Confirm config exists.
+- Confirm config exists (searches the default `<vault>/_sync/cortex.yaml` path
+  used by `setup.sh`; no `--config` flag required).
 - Confirm vault path exists.
 - Confirm distilled output exists.
 - Confirm memory file exists.
@@ -242,6 +275,10 @@ cortex memory search "deployment preferences"
 
 Purpose: write a memory note from the CLI.
 
+Scope for Phase 1: **metadata only.** The command accepts `--title`, `--type`,
+`--tier`, and `--tags` and creates the note with valid frontmatter and an empty
+body. Body input (editor/stdin) is deferred to Phase 4.
+
 Expected UX:
 
 ```bash
@@ -272,9 +309,9 @@ cortex version
 Example output:
 
 ```text
-Cortex: 0.1.0
-Schema: 1
-MCP: 0.1.0
+Cortex: 1.4.0
+Schema: 2
+MCP: 1.4.0
 ```
 
 ---
@@ -300,7 +337,9 @@ python cortex-import.py
 python cortex-uninstall.py
 ```
 
-If scripts are replaced, each script should print a deprecation warning and delegate to the new CLI.
+When porting a script, leave the original at repo root as a shim that prints a
+deprecation warning and delegates to the new CLI. Remove shims only after Phase 2
+CI confirms the test suite passes against the packaged modules.
 
 ---
 
@@ -337,6 +376,10 @@ Create tests for:
 - Version command output.
 - Memory search command behavior with a sample memory file.
 
+The existing tests import root scripts via `sys.path.insert`. After porting,
+update those imports to `cortex.*` module paths (e.g. `from cortex.distiller.core
+import scan_vault`) so tests exercise the packaged code.
+
 Suggested test command:
 
 ```bash
@@ -347,4 +390,5 @@ pytest tests/test_cli.py
 
 ## Done Definition
 
-This phase is done when Cortex can be installed and operated through a single `cortex` command without requiring the user to know the underlying script names.
+This phase is done when Cortex can be installed and operated through a single
+`cortex` command without requiring the user to know the underlying script names.

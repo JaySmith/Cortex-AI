@@ -3,7 +3,9 @@
 ## Agent Implementation Brief
 
 ### Objective
-Turn Cortex from a useful tool into a polished product experience that new users can understand quickly, install confidently, and operate safely.
+
+Turn Cortex from a useful tool into a polished product experience that new users
+can understand quickly, install confidently, and operate safely.
 
 This phase focuses on onboarding, diagnostics, upgrades, documentation, templates, and user trust.
 
@@ -55,7 +57,8 @@ Query
 Trust
 ```
 
-The user should not need to understand schema versions, MCP internals, sync folders, or distillation architecture during first use.
+The user should not need to understand schema versions, MCP internals, sync
+folders, or distillation architecture during first use.
 
 ---
 
@@ -76,6 +79,10 @@ docs/
   migration.md
   development.md
 ```
+
+`migration.md` documents **manual** procedures for schema version changes.
+Automated schema migration is a future phase — `cortex upgrade` only warns on a
+version change (see the `cortex upgrade` section).
 
 ### README.md Structure
 
@@ -197,12 +204,15 @@ Responsibilities:
 
 1. Detect current install.
 2. Create backup.
-3. Check schema compatibility.
-4. Apply migrations if required.
-5. Rebuild MCP server if required.
-6. Re-run distillation.
-7. Re-validate with doctor checks.
-8. Print summary.
+3. Check schema version — **warn only** if `SCHEMA_VERSION` has changed. Do NOT
+   attempt automated migration (out of scope; see note below).
+4. Rebuild MCP server if required.
+5. Re-run distillation.
+6. Re-validate with doctor checks.
+7. Print summary.
+
+Automated schema migration is out of scope for this phase. If a schema version
+change is detected, point the user to `docs/migration.md` for manual steps.
 
 UX:
 
@@ -220,11 +230,18 @@ Example output:
 Cortex upgrade preview
 
 Would backup: /path/to/vault/_sync
-Would migrate schema: 2 -> 3
+Schema: 2 (unchanged)
 Would rebuild MCP server
 Would re-distill memory
 
 Run cortex upgrade --apply to apply changes.
+```
+
+If the schema version differs, the preview warns instead of migrating:
+
+```text
+Schema: 2 -> 3 (change detected)
+Warning: automated migration is not supported. See docs/migration.md.
 ```
 
 ---
@@ -266,6 +283,11 @@ vault/
 ```
 
 Each template should include valid frontmatter and comments explaining what belongs in the note.
+
+Templates live in `cortex/templates/` (Python package directory) and are shipped
+as package data in `pyproject.toml` (see Phase 1 `[tool.setuptools.package-data]`).
+The `cortex init` command locates them at runtime via `importlib.resources`, not
+relative filesystem paths — so they resolve correctly after `uv tool install`.
 
 ---
 
@@ -371,6 +393,8 @@ Minimum coverage:
 - `cortex doctor` gives suggested fix for missing memory.
 - `cortex upgrade --dry-run` writes nothing.
 - `cortex upgrade --apply` creates backup and revalidates.
+- `cortex upgrade --apply` attempts NO schema migration even when `SCHEMA_VERSION`
+  has changed (it warns and points to `docs/migration.md`).
 - Error messages include what failed, why it matters, and suggested fix.
 
 ---
@@ -401,10 +425,13 @@ migration
 development
 ```
 
-A new user can understand the value and basic usage from the README and quickstart without needing to read architecture docs.
+A new user can understand the value and basic usage from the README and
+quickstart without needing to read architecture docs.
 
 ---
 
 ## Done Definition
 
-This phase is done when Cortex has a polished onboarding and operating experience: clear docs, safe upgrades, useful diagnostics, starter templates, and actionable errors that make the product easy to adopt and hard to misuse.
+This phase is done when Cortex has a polished onboarding and operating experience:
+clear docs, safe upgrades, useful diagnostics, starter templates, and actionable
+errors that make the product easy to adopt and hard to misuse.
