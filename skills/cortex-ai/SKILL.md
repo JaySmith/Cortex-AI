@@ -1,6 +1,6 @@
 ---
 name: cortex-ai
-description: Work with the Cortex vault — search notes, list by tier/type, add new notes, capture session knowledge, sync (capture-then-rebuild), import an existing agent, check the version or vault health, look up a note's vault path, or manage hive connection (shared vault across machines). Use when the user says "cortex", "search my notes", "add a note", "capture this", "cortex search", "cortex list", "cortex add", "cortex sync", "sync", "cortex get", "cortex open", "cortex import", "cortex version", "cortex status", "vault health", "update my memory", "cortex hive", "hive status", "hive push", "hive pull", or similar vault operations. On "sync", always capture session knowledge before rebuilding.
+description: Work with the Cortex vault — search notes, list by tier/type, add new notes, capture session knowledge, sync (capture-then-rebuild), import an existing agent, check the version or vault health, look up a note's vault path, or manage hive connection (shared vault across machines). Use when the user says "cortex", "search my notes", "add a note", "capture this", "cortex search", "cortex list", "cortex add", "cortex sync", "sync", "cortex get", "cortex open", "cortex import", "cortex version", "cortex status", "vault health", "update my memory", "cortex hive", "hive status", "hive push", "hive pull", or similar vault operations. For "auto-learn", "what did you learn?", "what should I capture?", "learning mode", or "learning check", load the auto-learn skill instead. On "sync", always capture session knowledge before rebuilding.
 ---
 
 # Cortex AI
@@ -90,6 +90,10 @@ A sync is **capture-then-rebuild-then-drain**, in this order:
    ```
 
 Trigger phrases: "sync", "cortex sync", "sync my vault".
+
+**Optional: auto-learn step.** After drain, if the session produced substantive
+content (>5 meaningful turns), optionally run the `auto-learn` skill's observe
+→ propose cycle. The human decides what gets captured. Do not auto-write.
 
 > **For full details** on sync drain guardrails, protected notes, and all advanced
 > commands (version, status, uninstall, list, import, purge, portfolio, open, hive),
