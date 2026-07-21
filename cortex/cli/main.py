@@ -1204,8 +1204,7 @@ def write(
     tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
 
     # Determine type directory
-    type_dir_name = note_type + ("s" if not note_type.endswith("s") else "")
-    target_dir = vault_path / type_dir_name
+    target_dir = vault_path / note_type
     target_dir.mkdir(parents=True, exist_ok=True)
 
     note_path = target_dir / f"{note_id}.md"
