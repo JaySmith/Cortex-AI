@@ -99,20 +99,61 @@ def _error(what: str, why: str, fix: str) -> None:
     typer.echo(f"  Suggested fix:\n    {fix}\n", err=True)
 
 
-def _find_vault() -> Path:
-    """Try to find an existing vault by scanning home for _sync/cortex.yaml."""
-    cwd = Path.cwd()
-    if (cwd / "_sync" / "cortex.yaml").exists():
-        return cwd
-    home = Path.home()
-    for p in home.iterdir():
-        if not p.is_dir():
-            continue
-        try:
+def _cortex_config_dir() -> Path:
+    return Path.home() / ".config" / "cortex"
+
+
+def _cortex_pointer() -> Path:
+    return _cortex_config_dir() / "config"
+
+
+def _load_cortex_pointer() -> Path | None:
+    """Read the vault path from ~/.config/cortex/config."""
+    ptr = _cortex_pointer()
+    if not ptr.exists():
+        return None
+    try:
+        text = ptr.read_text(encoding="utf-8").strip()
+        for line in text.splitlines():
+            line = line.strip()
+            if line.startswith("vault_path:"):
+                raw = line.split(":", 1)[1].strip().strip("\"'")
+                p = Path(raw).expanduser()
+                if (p / "_sync" / "cortex.yaml").exists():
+                    return p
+    except Exception:
+        pass
+    return None
+
+
+def _save_cortex_pointer(vault_path: Path) -> None:
+    """Write the vault path to ~/.config/cortex/config."""
+    _cortex_config_dir().mkdir(parents=True, exist_ok=True)
+    _cortex_pointer().write_text(f"vault_path: {vault_path}\n", encoding="utf-8")
+
+
+def _find_vault_path_cortex_yaml(root: Path) -> Path | None:
+    """Walk root looking for _sync/cortex.yaml up to 2 levels deep."""
+    try:
+        for p in root.iterdir():
+            if not p.is_dir() or p.name.startswith("."):
+                continue
             if (p / "_sync" / "cortex.yaml").exists():
                 return p
-        except PermissionError:
-            continue
+            for sub in p.iterdir():
+                if sub.is_dir() and not sub.name.startswith("."):
+                    if (sub / "_sync" / "cortex.yaml").exists():
+                        return sub
+    except PermissionError:
+        pass
+    return None
+
+
+def _find_vault() -> Path:
+    """Try to find an existing vault by scanning home for _sync/cortex.yaml."""
+    vp = _find_vault_path(None)
+    if vp:
+        return vp
     typer.echo(
         "  WARNING: No vault found — defaulting to current directory. "
         "Pass --vault to specify your vault path.",
@@ -473,6 +514,11 @@ def install(
             actions_file.unlink(missing_ok=True)
             manifest_dir.rmdir()
 
+    # ---- Write pointer file ----
+    if not dry_run:
+        _save_cortex_pointer(vault_path)
+        typer.echo(f"    wrote {_cortex_pointer()}")
+
     # ---- Done ----
     typer.echo("\n==> Done")
     if upgrade:
@@ -528,6 +574,12 @@ def uninstall(
         apply=apply,
         purge=purge,
     )
+    # Clean up pointer file on successful apply
+    if rc == 0 and apply:
+        ptr = _cortex_pointer()
+        if ptr.exists():
+            ptr.unlink()
+            typer.echo(f"  removed {ptr}")
     raise typer.Exit(code=rc)
 
 
@@ -602,30 +654,14 @@ def status(
     ),
 ) -> None:
     """Show basic health of the Cortex installation."""
-    # Try to find config
-    config_file = None
-    vault_path = None
-    if vault:
-        vault_path = Path(vault).expanduser()
-        cfg = vault_path / "_sync" / "cortex.yaml"
+    vp: Path | None = _find_vault_path(vault)
+    config_file: Path | None = None
+    vault_path: Path | None = None
+    if vp:
+        cfg = vp / "_sync" / "cortex.yaml"
         if cfg.exists():
             config_file = cfg
-    else:
-        # Scan cwd then home for any _sync/cortex.yaml
-        cwd = Path.cwd()
-        cfg_cwd = cwd / "_sync" / "cortex.yaml"
-        if cfg_cwd.exists():
-            config_file = cfg_cwd
-            vault_path = cwd
-        else:
-            home = Path.home()
-            for p in home.iterdir():
-                if p.is_dir():
-                    cfg = p / "_sync" / "cortex.yaml"
-                    if cfg.exists():
-                        config_file = cfg
-                        vault_path = p
-                        break
+            vault_path = vp
 
     if config_file and config_file.exists():
         typer.echo("Config:           found")
@@ -749,6 +785,48 @@ def version() -> None:
 
 
 # ---------------------------------------------------------------------------
+# config
+# ---------------------------------------------------------------------------
+
+config_app = typer.Typer(
+    name="config",
+    help="Manage local Cortex pointer config",
+    no_args_is_help=True,
+)
+app.add_typer(config_app, name="config")
+
+
+@config_app.command()
+def set(
+    vault: str = typer.Argument(
+        ...,
+        help="Vault path to store as the default",
+    ),
+) -> None:
+    """Set the default vault path in ~/.config/cortex/config."""
+    vault_path = Path(vault).expanduser().resolve()
+    if not vault_path.exists():
+        _error(
+            f"Vault path does not exist: {vault_path}",
+            "The path must point to an existing directory.",
+            "Create the directory first or provide a different path.",
+        )
+        raise typer.Exit(code=1)
+    _save_cortex_pointer(vault_path)
+    typer.echo(f"Set default vault to: {vault_path}")
+
+
+@config_app.command(name="get")
+def config_get() -> None:
+    """Print the current default vault path."""
+    p = _load_cortex_pointer()
+    if p:
+        typer.echo(str(p))
+    else:
+        typer.echo("No default vault set.")
+
+
+# ---------------------------------------------------------------------------
 # init
 # ---------------------------------------------------------------------------
 
@@ -811,45 +889,41 @@ def init(
 
 
 def _find_memory_json(vault: str | None) -> Path | None:
-    """Locate memory.json from --vault option or common locations."""
+    """Locate memory.json from --vault option, env var, or auto-detect."""
     if vault:
         vp = Path(vault).expanduser()
         mp = vp / "_sync" / "encoded" / "memory.json"
         if mp.exists():
             return mp
         return mp  # return path even if missing — caller handles
-    # Check cwd first, then scan home
-    cwd = Path.cwd()
-    mp_cwd = cwd / "_sync" / "encoded" / "memory.json"
-    if mp_cwd.exists():
-        return mp_cwd
-    home = Path.home()
-    for p in home.iterdir():
-        if p.is_dir():
-            mp_home = p / "_sync" / "encoded" / "memory.json"
-            if mp_home.exists():
-                return mp_home
+    vp = _find_vault_path(None)
+    if vp:
+        mp = vp / "_sync" / "encoded" / "memory.json"
+        if mp.exists():
+            return mp
+        return mp
     return None
 
 
 def _find_vault_path(vault: str | None) -> Path | None:
-    """Locate vault root from --vault option or common locations."""
+    """Locate vault root from --vault option, env var, pointer file, or auto-detect."""
     if vault:
         return Path(vault).expanduser()
-    # Check cwd first, then scan home for any _sync/cortex.yaml
+    # 1. CORTEX_VAULT env var override
+    if "CORTEX_VAULT" in os.environ:
+        p = Path(os.environ["CORTEX_VAULT"]).expanduser()
+        if (p / "_sync" / "cortex.yaml").exists():
+            return p
+    # 2. ~/.config/cortex/config pointer file (set by `cortex install` / `cortex config set`)
+    p = _load_cortex_pointer()
+    if p:
+        return p
+    # 3. Check cwd
     cwd = Path.cwd()
     if (cwd / "_sync" / "cortex.yaml").exists():
         return cwd
-    home = Path.home()
-    for p in home.iterdir():
-        if not p.is_dir():
-            continue
-        try:
-            if (p / "_sync" / "cortex.yaml").exists():
-                return p
-        except PermissionError:
-            continue
-    return None
+    # 4. Scan home dirs up to 2 levels deep
+    return _find_vault_path_cortex_yaml(Path.home())
 
 
 def _scan_vault_for_note(vault_root: Path, note_id: str) -> Path | None:
