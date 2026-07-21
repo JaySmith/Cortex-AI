@@ -159,6 +159,30 @@ tier and note deletion is sufficient for now.
 
 ---
 
+## Future — skill optimizer
+
+A `cortex skill optimize` command that audits installed skills for efficiency
+and auto-load correctness.
+
+**Auto-load audit:**
+- Each skill's `description` field is checked against the skill's actual triggers
+  and content — missing or overly narrow trigger phrases are flagged.
+- Skills with overlapping descriptions are detected so loading conflicts can be
+  resolved (only one skill loads per match).
+
+**Token budget:**
+- Enforces the SKILL.md ≤ 100 lines / ≤ 700 tokens convention.
+- Flags oversized inline reference tables that should be moved to `reference.md`.
+- Reports per-skill load-time token cost.
+
+**Implementation:** a new `cortex/skill_optimizer.py` module that reads
+`~/.config/opencode/skills/*/SKILL.md`, parses descriptions, measures line/token
+counts, and outputs a report. Suggested fixes for each violation. `--fix` flag
+rewrites descriptions for broader trigger coverage and splits oversized files.
+
+**Trigger:** implement when skill count exceeds 10+ or load-time token bloat is
+observed.
+
 ## Contributing to this roadmap
 
 Per the repo-first rule, plan here (or in the vault) before building, and always
