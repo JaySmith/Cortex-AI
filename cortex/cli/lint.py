@@ -19,6 +19,7 @@ Exit codes:
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 from collections.abc import Callable
@@ -445,6 +446,8 @@ def _apply_fixes(results: list[LintResult], vault_path: Path, notes: list[VaultN
             _fix_missing_field(note.path, "tier", "core")
         elif result.rule == "missing-aliases":
             _fix_missing_aliases(note)
+        elif result.rule == "non-slug-id":
+            _fix_non_slug_id(note)
 
 
 def _fix_missing_field(path: Path, field: str, value: str) -> None:
@@ -495,6 +498,52 @@ def _fix_missing_aliases(note: VaultNote) -> None:
 
     lines.insert(fm_end, f'aliases: ["{title}"]')
     note.path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _fix_non_slug_id(note: VaultNote) -> None:
+    """Rename file to kebab-case slug and update frontmatter id."""
+    old_stem = note.path.stem
+    slug = re.sub(r"[^a-z0-9]+", "-", old_stem.lower()).strip("-")
+    if not slug or slug == old_stem:
+        return
+
+    new_path = note.path.with_stem(slug)
+    if new_path.exists():
+        return
+
+    content = note.path.read_text(encoding="utf-8")
+    lines = content.split("\n")
+    fm_end = -1
+    dash_count = 0
+    for i, line in enumerate(lines):
+        if line.strip() == "---":
+            dash_count += 1
+            if dash_count == 2:
+                fm_end = i
+                break
+    if fm_end < 0:
+        return
+
+    updated = False
+    for i in range(1, fm_end):
+        if lines[i].strip().startswith("id:"):
+            lines[i] = f'id: {slug}'
+            updated = True
+            break
+    if not updated:
+        lines.insert(fm_end, f"id: {slug}")
+
+    has_aliases = any(
+        lines[i].strip().startswith("aliases:") for i in range(1, fm_end)
+    )
+    if not has_aliases:
+        title = old_stem.replace("-", " ").title()
+        lines.insert(fm_end, f'aliases: ["{title}"]')
+
+    note.path.write_text("\n".join(lines), encoding="utf-8")
+    note.path.rename(new_path)
+    note.name = slug
+    print(f"  renamed: {old_stem} -> {slug}")
 
 
 # ---------------------------------------------------------------------------
