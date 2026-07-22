@@ -139,6 +139,7 @@ Trigger phrases: "sync", "cortex sync", "sync my vault".
 
 ---
 
-`cortex memory write` triggers encoding automatically in the background
-(unless `--no-encode` is passed). The CLI re-reads `memory.json` fresh on
-every call, so no manual reload is needed.
+`cortex memory write` updates `memory.json` inline (notes + wiki-link graph)
+— no full encode needed. The CLI re-reads `memory.json` fresh on every call.
+Run `cortex encode` or `cortex sync` for a full rebuild (core-context.md,
+skill reference files, project context).

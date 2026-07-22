@@ -40,6 +40,7 @@ from cortex.encoder.core import (
     run_encode,
     schema_version,
 )
+from cortex.vault.links import extract_wiki_links, strip_wiki_links
 
 app = typer.Typer(
     name="cortex",
@@ -796,8 +797,8 @@ config_app = typer.Typer(
 app.add_typer(config_app, name="config")
 
 
-@config_app.command()
-def set(
+@config_app.command(name="set")
+def _config_set(
     vault: str = typer.Argument(
         ...,
         help="Vault path to store as the default",
@@ -1275,7 +1276,17 @@ def write(
         typer.echo("  body: included")
 
     if not no_encode:
-        _fire_encode(vault_path)
+        _update_memory_json_inline(
+            vault_root=vault_path,
+            note_id=note_id,
+            note_type=note_type,
+            tier=tier,
+            category=category,
+            aliases=[title],
+            tags=tag_list,
+            body=body_text,
+            updated=today,
+        )
 
 
 @memory_app.command()
@@ -1574,60 +1585,83 @@ def _build_note_content(
     return "\n".join(parts)
 
 
-def _resolve_encode_python(vault_root: Path) -> str:
-    """Find the Python interpreter that can run cortex.encoder.core."""
-    # 1. ENCODE_PYTHON env var override
-    if env_python := os.environ.get("ENCODE_PYTHON"):
-        return env_python
-    # 2. Use the same Python that's running us (uv tool, venv, etc.)
-    me = sys.executable
-    if me and _can_import_cortex(me):
-        return me
-    # 3. Cross-platform venv detection in vault's _sync
-    for candidate in [
-        vault_root / "_sync" / ".venv" / "bin" / "python",
-        vault_root / "_sync" / ".venv" / "Scripts" / "python.exe",
-    ]:
-        if candidate.exists():
-            return str(candidate)
-    # 4. Fallback: check PATH
-    for fallback in ["python3", "python"]:
-        if shutil.which(fallback) and _can_import_cortex(shutil.which(fallback)):
-            return str(shutil.which(fallback))
-    return sys.executable or "python3"
+def _update_memory_json_inline(
+    vault_root: Path,
+    note_id: str,
+    note_type: str,
+    tier: str,
+    category: str | None,
+    aliases: list[str],
+    tags: list[str],
+    body: str,
+    updated: str,
+) -> None:
+    """Inline update of memory.json after a write — no full encode needed.
 
+    Upserts the note and patches _graph.adjacency from [[wiki-links]] in the body.
+    """
+    mem_path = vault_root / "_sync" / "encoded" / "memory.json"
+    if not mem_path.exists():
+        return
 
-def _can_import_cortex(python_path: str | None) -> bool:
-    """Check if a given Python interpreter can import the cortex package."""
-    if not python_path:
-        return False
     try:
-        result = subprocess.run(
-            [python_path, "-c", "import cortex; print('ok')"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        return result.returncode == 0 and result.stdout.strip() == "ok"
-    except Exception:
-        return False
+        data = json.loads(mem_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
 
+    notes = data.setdefault("notes", {})
+    graph = data.setdefault("_graph", {})
+    adjacency = graph.setdefault("adjacency", {})
 
-def _fire_encode(vault_root: Path) -> None:
-    """Fire-and-forget encode after a write, so memory.json stays current."""
-    python = _resolve_encode_python(vault_root)
-    config_path = vault_root / "_sync" / "cortex.yaml"
-    if not config_path.exists():
-        return  # vault not fully set up yet
-    try:
-        subprocess.Popen(
-            [python, "-m", "cortex.encoder.core", "--config", str(config_path)],
-            cwd=str(vault_root),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    except Exception:
-        pass  # encode is best-effort
+    # Build note dict matching VaultNote.to_dict format
+    note_entry = {
+        "id": note_id,
+        "type": note_type,
+        "category": category or "",
+        "tier": tier,
+        "tags": tags or [],
+        "updated": updated,
+        "aliases": aliases or [],
+        "content": strip_wiki_links(body or ""),
+    }
+    notes[note_id] = note_entry
+
+    # Update meta count
+    meta = data.setdefault("_meta", {})
+    meta["count"] = len(notes)
+
+    # Parse [[wiki-links]] from raw body
+    targets = set(extract_wiki_links(body or ""))
+
+    # Remove stale reverse edges for this note
+    for key in list(adjacency):
+        adjacency[key] = [n for n in adjacency[key] if n != note_id]
+        if not adjacency[key]:
+            del adjacency[key]
+
+    # Set new forward edges
+    if targets:
+        adjacency[note_id] = list(targets)
+    elif note_id in adjacency:
+        del adjacency[note_id]
+
+    # Set new reverse edges
+    for target in targets:
+        if target not in adjacency:
+            adjacency[target] = []
+        if note_id not in adjacency[target]:
+            adjacency[target].append(note_id)
+
+    # Update edges list if present
+    if "edges" in graph:
+        graph["edges"] = [
+            e for e in graph["edges"]
+            if e["source"] != note_id and e["target"] != note_id
+        ]
+        for target in targets:
+            graph["edges"].append({"source": note_id, "target": target})
+
+    mem_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
