@@ -744,7 +744,7 @@ def import_cmd(
         "--dry-run",
         help="Show what would happen without writing anything",
     ),
-    agents_md: str | None = typer.Option(None, "--agents-md", help="Path to AGENTS.md"),
+    agents_md: str | None = typer.Option(None, "--agents-md", help="Path to agents.md"),
     claude_md: str | None = typer.Option(None, "--claude-md", help="Path to CLAUDE.md"),
     opencode: str | None = typer.Option(None, "--opencode", help="Path to opencode.jsonc"),
     claude_memory: str | None = typer.Option(
@@ -903,6 +903,28 @@ def _find_memory_json(vault: str | None) -> Path | None:
             return mp
         return mp
     return None
+
+
+def _load_memory_json(vault: str | None) -> tuple[dict, Path]:
+    """Load and return memory.json data + path. Exits on error."""
+    mem_path = _find_memory_json(vault)
+    if not mem_path or not mem_path.exists():
+        _error(
+            "memory.json not found",
+            "The encoded memory index is required.",
+            "Run 'cortex encode' to generate memory.json from your vault notes.",
+        )
+        raise typer.Exit(code=1)
+    try:
+        data = json.loads(mem_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        _error(
+            f"Could not read memory.json: {e}",
+            "The memory index file exists but is unreadable.",
+            "Run 'cortex encode' to regenerate memory.json.",
+        )
+        raise typer.Exit(code=1) from e
+    return data, mem_path
 
 
 def _find_vault_path(vault: str | None) -> Path | None:
@@ -1173,6 +1195,9 @@ def write(
         False, "--update", help="Update an existing note (patch body + bump date)"
     ),
     no_encode: bool = typer.Option(False, "--no-encode", help="Skip automatic encode after write"),
+    root: bool = typer.Option(
+        False, "--root", help="Write to vault root as a flat file (e.g. Learnings.md)"
+    ),
     vault: str | None = typer.Option(None, "--vault", help="Vault path (auto-detect by default)"),
 ) -> None:
     """Write a memory note to the vault. Without --body/--body-file, writes frontmatter only."""
@@ -1203,11 +1228,12 @@ def write(
 
     tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
 
-    # Determine type directory
-    target_dir = vault_path / note_type
-    target_dir.mkdir(parents=True, exist_ok=True)
-
-    note_path = target_dir / f"{note_id}.md"
+    if root:
+        note_path = vault_path / f"{note_id}.md"
+    else:
+        target_dir = vault_path / note_type
+        target_dir.mkdir(parents=True, exist_ok=True)
+        note_path = target_dir / f"{note_id}.md"
 
     if note_path.exists():
         if not update:
@@ -1250,6 +1276,245 @@ def write(
 
     if not no_encode:
         _fire_encode(vault_path)
+
+
+@memory_app.command()
+def related(
+    note_id: str = typer.Argument(..., help="Note id slug to find related notes for"),
+    limit: int = typer.Option(5, "--limit", "-n", help="Max related notes to return"),
+    vault: str | None = typer.Option(None, "--vault", help="Vault path (auto-detect by default)"),
+) -> None:
+    """Find notes related to a given note by shared tags, category, and wiki-links."""
+    data, _mem_path = _load_memory_json(vault)
+
+    notes = data.get("notes", {})
+    note = notes.get(note_id)
+    if note is None:
+        _error(
+            f"Note '{note_id}' not found",
+            "The note was not found in memory.json.",
+            "Check the id for typos. Use 'cortex memory search' to find available notes.",
+        )
+        raise typer.Exit(code=1)
+
+    graph = data.get("_graph", {})
+    adjacency: dict[str, list[str]] = graph.get("adjacency", {})
+    graph_neighbors = set(adjacency.get(note_id, []))
+
+    note_tags = set(note.get("tags", []))
+    note_category = note.get("category", "")
+    note_type = note.get("type", "")
+
+    scored = []
+    for nid, n in notes.items():
+        if nid == note_id:
+            continue
+        score = 0
+        if nid in graph_neighbors:
+            score += 20
+        tag_overlap = len(set(n.get("tags", [])) & note_tags)
+        score += tag_overlap * 4
+        if n.get("category", "") == note_category:
+            score += 3
+        if n.get("type", "") == note_type:
+            score += 1
+        if score > 0:
+            scored.append((score, nid, n))
+
+    scored.sort(key=lambda x: -x[0])
+    results = scored[:limit]
+
+    if not results:
+        typer.echo(f"No related notes found for '{note_id}'.")
+        return
+
+    typer.echo(f"Found {len(results)} related note(s) for '{note_id}':\n")
+    for score, nid, n in results:
+        aliases = n.get("aliases", [])
+        alias = aliases[0] if aliases else nid
+        snippet = n.get("content", "")[:120].replace("\n", " ").strip()
+        typer.echo(f"  {nid}  · {n.get('type', '?')}/{n.get('category', '')}  · {alias}  (score: {score})")
+        if snippet:
+            typer.echo(f"    {snippet}...")
+
+
+@memory_app.command(name="think")
+def think(
+    query: str = typer.Argument(..., help="Question or topic to synthesize context for"),
+    limit: int = typer.Option(5, "--limit", "-n", help="Max primary notes to include"),
+    vault: str | None = typer.Option(None, "--vault", help="Vault path (auto-detect by default)"),
+) -> None:
+    """Synthesize a rich context for answering a question from the vault.
+
+    Gathers full content from primary results, cross-references related notes,
+    and identifies gaps in coverage.
+    """
+    data, _mem_path = _load_memory_json(vault)
+
+    notes: dict[str, dict] = data.get("notes", {})
+    query_lower = query.lower()
+    search_limit = max(limit * 2, 10)
+
+    # Phase 1: broad search
+    scored = []
+    for nid, note in notes.items():
+        s = 0
+        if query_lower in nid:
+            s += 10
+        for alias in note.get("aliases", []):
+            if query_lower in alias.lower():
+                s += 8
+        for tag in note.get("tags", []):
+            if query_lower == tag.lower():
+                s += 6
+            elif query_lower in tag.lower():
+                s += 3
+        if query_lower in note.get("category", "").lower():
+            s += 5
+        if query_lower in note.get("content", "").lower():
+            s += 1
+        if s > 0:
+            scored.append((s, nid, note))
+
+    scored.sort(key=lambda x: -x[0])
+    primary_results = scored[:search_limit]
+
+    # Phase 2: full content for top results
+    source_notes = []
+    primary_ids = set()
+    for _s, nid, note in primary_results:
+        primary_ids.add(nid)
+        source_notes.append({
+            "id": nid,
+            "type": note.get("type", ""),
+            "category": note.get("category", ""),
+            "aliases": note.get("aliases", []),
+            "tags": note.get("tags", []),
+            "content": note.get("content", ""),
+            "relevance": "primary",
+        })
+
+    # Phase 3: cross-references between primary results
+    cross_refs = []
+    for i in range(len(primary_results)):
+        for j in range(i + 1, len(primary_results)):
+            _, nid_i, note_i = primary_results[i]
+            _, nid_j, note_j = primary_results[j]
+            shared = set(note_i.get("tags", [])) & set(note_j.get("tags", []))
+            if shared:
+                cross_refs.append({
+                    "from": nid_i,
+                    "to": nid_j,
+                    "sharedTags": list(shared),
+                })
+
+    # Phase 4: pull in related notes not already in primary results
+    related_ids = set()
+    graph = data.get("_graph", {})
+    adjacency = graph.get("adjacency", {})
+    for _s, nid, note in primary_results[:3]:
+        note_tags_set = set(note.get("tags", []))
+        note_category = note.get("category", "")
+        note_type = note.get("type", "")
+        graph_neighbors = set(adjacency.get(nid, []))
+
+        for rnid, rnote in notes.items():
+            if rnid == nid or rnid in primary_ids or rnid in related_ids:
+                continue
+            rscore = 0
+            if rnid in graph_neighbors:
+                rscore += 20
+            rtag_overlap = len(set(rnote.get("tags", [])) & note_tags_set)
+            rscore += rtag_overlap * 4
+            if rnote.get("category", "") == note_category:
+                rscore += 3
+            if rnote.get("type", "") == note_type:
+                rscore += 1
+            if rscore > 0:
+                related_ids.add(rnid)
+                source_notes.append({
+                    "id": rnid,
+                    "type": rnote.get("type", ""),
+                    "category": rnote.get("category", ""),
+                    "aliases": rnote.get("aliases", []),
+                    "tags": rnote.get("tags", []),
+                    "content": rnote.get("content", "")[:500],
+                    "relevance": "related",
+                })
+
+    # Phase 5: gap analysis
+    gaps: list[str] = []
+    all_types = {n["type"] for n in source_notes}
+    if not source_notes:
+        gaps.append("No notes found matching this query — the vault has no coverage on this topic.")
+    elif len(source_notes) <= 2:
+        gaps.append(
+            f"Only {len(source_notes)} note(s) found — coverage may be thin. "
+            "Consider capturing more context on this topic."
+        )
+    if len(all_types) == 1 and len(source_notes) > 2:
+        gaps.append(
+            f'All results are type "{list(all_types)[0]}" — no cross-type perspective '
+            "found (e.g. decisions, risks, or entities that relate)."
+        )
+
+    now = datetime.now()
+    stale_threshold = 90 * 24 * 60 * 60
+    stale = [n["id"] for n in source_notes if n["id"] in notes]
+    stale_ids = []
+    for sid in stale:
+        orig = notes.get(sid)
+        if orig and orig.get("updated"):
+            try:
+                updated = datetime.strptime(orig["updated"], "%Y-%m-%d")
+                if (now - updated).days > 90:
+                    stale_ids.append(sid)
+            except (ValueError, TypeError):
+                pass
+    if stale_ids:
+        gaps.append(
+            f"{len(stale_ids)} note(s) haven't been updated in 90+ days: "
+            f"{', '.join(stale_ids)}. Information may be outdated."
+        )
+
+    # Output
+    primary = [n for n in source_notes if n["relevance"] == "primary"]
+    related_n = [n for n in source_notes if n["relevance"] == "related"]
+
+    typer.echo(f"# Synthesis Context for: \"{query}\"\n")
+
+    typer.echo(f"## Primary Sources ({len(primary)})\n")
+    for n in primary:
+        alias_str = f" (aka {', '.join(n['aliases'])})" if n["aliases"] else ""
+        tags_str = f" [{', '.join(n['tags'])}]" if n["tags"] else ""
+        typer.echo(f"### {n['id']}{alias_str} — {n['type']}/{n['category']}{tags_str}\n")
+        typer.echo(n["content"])
+        typer.echo("")
+
+    if related_n:
+        typer.echo(f"## Related Context ({len(related_n)})\n")
+        for n in related_n:
+            tags_str = f" [{', '.join(n['tags'])}]" if n["tags"] else ""
+            snippet = n["content"][:300].replace("\n", " ").strip()
+            typer.echo(f"- **{n['id']}** ({n['type']}/{n['category']}){tags_str}")
+            typer.echo(f"  {snippet}…\n")
+
+    if cross_refs:
+        typer.echo("## Cross-References\n")
+        for ref in cross_refs:
+            typer.echo(f"- {ref['from']} ↔ {ref['to']} (shared: {', '.join(ref['sharedTags'])})")
+        typer.echo("")
+
+    if gaps:
+        typer.echo("## Gaps in Coverage\n")
+        for g in gaps:
+            typer.echo(f"- {g}")
+        typer.echo("")
+
+    typer.echo("---")
+    typer.echo("Use the above context to synthesize a direct, well-cited answer. "
+               "Cite note ids (e.g. [[note-id]]) when referencing specific sources. "
+               "If gaps exist, explicitly note what the vault doesn't know.")
 
 
 def _read_body(body: str | None, body_file: str | None) -> str:

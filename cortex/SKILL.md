@@ -12,7 +12,7 @@ read, and write access.
 > **Paths.** Resolve vault paths at runtime: `cortex encode --show-config`
 > (returns JSON with `vault_path`, `config_file`, `memory_json`, etc.).
 
-**CLI commands (read):** `cortex memory search`, `cortex memory get`
+**CLI commands (read):** `cortex memory search`, `cortex memory get`, `cortex memory related`, `cortex memory think`
 **CLI commands (write):** `cortex memory write` — creates/updates a note and auto-triggers encoding
 
 ---
@@ -35,6 +35,37 @@ cortex memory get <id>
 ```
 
 Returns full content + metadata. Falls back to raw vault file if not in memory.json.
+
+### related `<id>`
+
+```
+cortex memory related <id>
+```
+
+Use after a `search` or `get` to surface notes that connect to the same topic. The command scores by shared tags, same category/type, and wiki-link graph adjacency.
+
+### think `<query>`
+
+```
+cortex memory think "<query>"
+```
+
+Synthesizes a rich context bundle: primary search results at full depth, cross-references between them, related notes pulled in from the graph, and gap analysis (thin coverage, narrow type spread, stale notes). Designed to answer a question in one pass.
+
+### learnings
+
+`Learnings.md` at vault root is a scratch file for quick capture — no frontmatter
+needed, just append. Entries in Learnings.md are **not** indexed by `memory search`
+or returned by `memory think`. To make them visible to agents, promote periodically:
+
+```
+cortex memory write --title "<title>" --type knowledge --tier core --category patterns --body-file Learnings.md --root
+```
+
+Without `--root`, notes go into typed subdirectories (e.g. `knowledge/patterns/`).
+With `--root`, the file lands at the vault root (e.g. `Learnings.md`).
+
+Or use `capture` after a session to pull key points directly into proper notes.
 
 ### add `<title>`
 
