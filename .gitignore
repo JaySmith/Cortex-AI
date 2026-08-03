@@ -1,5 +1,6 @@
 __pycache__/
 *.pyc
+.playwright-mcp/
 .venv/
 *.egg-info/
 node_modules/
