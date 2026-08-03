@@ -3,7 +3,7 @@
 How to structure your Obsidian vault for encoding.
 
 > **For the canonical data model** (field definitions, types, hub value format),
-> see [`VAULT-NOTE-SCHEMA.md`](VAULT-NOTE-SCHEMA.md). This file covers directory
+> see [`vault-note-schema.md`](vault-note-schema.md). This file covers directory
 > layout and frontmatter usage; that file covers the wire format.
 
 ## Directory Layout
@@ -268,7 +268,7 @@ Some notes support extra fields for specific features:
 - `sharepoint_roadmap` → filename of roadmap in SharePoint (portfolio display)
 - `agents` → list of agent platforms a note is scoped to. **Parsed but not yet
   used for routing** — reserved for future multi-platform filtering (see the
-  "multi-platform agent routing" item in `ROADMAP.md`). Safe to omit.
+  "multi-platform agent routing" item in `roadmap.md`). Safe to omit.
 - `hive` → controls sync to shared vault (cortex-hub). Three states:
   - `true` — always sync to hub, even if tier is not in `replicate_tiers`
   - `false` — never sync, even if tier is in `replicate_tiers`

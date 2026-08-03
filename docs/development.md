@@ -2,7 +2,7 @@
 
 How to set up this repo for **contributing to Cortex itself** — editing the
 encoder, CLI, or skill. If you just want to *use* Cortex, see the
-[README](../README.md) and [QUICKSTART](./QUICKSTART.md) instead.
+[README](../README.md) and [quickstart](./quickstart.md) instead.
 
 ## Prerequisites
 
@@ -167,6 +167,6 @@ cortex uninstall --vault ~/cortex-ai --latest --apply  # revert
 
 ## See also
 
-- [EXTENDING.md](./EXTENDING.md) — add a custom output target to the encoder
-- [VAULT_SCHEMA.md](./VAULT_SCHEMA.md) — frontmatter reference
+- [extending.md](./extending.md) — add a custom output target to the encoder
+- [vault-schema.md](./vault-schema.md) — frontmatter reference
 - [CHANGELOG.md](../CHANGELOG.md) — versioning rules in full

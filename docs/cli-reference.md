@@ -178,7 +178,7 @@ cortex import [--vault VAULT] [--dry-run]
 |------|-------------|
 | `--vault` | Target vault (auto-detect if omitted) |
 | `--dry-run` | Preview without writing |
-| `--agents-md` | Path to `AGENTS.md` |
+| `--agents-md` | Path to `agents.md` |
 | `--claude-md` | Path to `CLAUDE.md` |
 | `--opencode` | Path to `opencode.jsonc` |
 | `--claude-memory` | Path to `~/.claude/memory/` directory |

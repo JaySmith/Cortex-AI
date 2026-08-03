@@ -7,7 +7,7 @@ Two jobs:
                (e.g. opencode.jsonc, whose "instructions" the encoder rewrites),
                plus copies of everything it imports, into a timestamped folder.
   2. IMPORT  — read what your agent already knows and seed the vault with it:
-                 - AGENTS.md / CLAUDE.md instruction files
+                 - agents.md / CLAUDE.md instruction files
                  - opencode "instructions" files (opencode.jsonc)
                  - ~/.claude/memory/*.md legacy flat-file memory
 
@@ -49,9 +49,9 @@ def default_locations() -> dict[str, list[Path]]:
     cwd = Path.cwd()
     return {
         "agents_md": [
-            cwd / "AGENTS.md",
-            home / "AGENTS.md",
-            home / ".config" / "opencode" / "AGENTS.md",
+            cwd / "agents.md",
+            home / "agents.md",
+            home / ".config" / "opencode" / "agents.md",
         ],
         "claude_md": [
             cwd / "CLAUDE.md",
@@ -277,9 +277,9 @@ def run_import(
     actions: list[dict[str, Any]] = []
     total = 0
 
-    print("-- AGENTS.md")
+    print("-- agents.md")
     total += import_markdown_file(
-        agents_md_path, "AGENTS.md", dest, backup_dir, dry_run, taken, actions
+        agents_md_path, "agents.md", dest, backup_dir, dry_run, taken, actions
     )
 
     print("-- CLAUDE.md")
@@ -334,7 +334,7 @@ def main() -> None:
         action="store_true",
         help="Show what would happen without writing anything",
     )
-    ap.add_argument("--agents-md", help="Path to AGENTS.md (default: auto-detect)")
+    ap.add_argument("--agents-md", help="Path to agents.md (default: auto-detect)")
     ap.add_argument("--claude-md", help="Path to CLAUDE.md (default: auto-detect)")
     ap.add_argument("--opencode", help="Path to opencode.jsonc (default: auto-detect)")
     ap.add_argument(

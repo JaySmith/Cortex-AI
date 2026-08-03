@@ -16,7 +16,7 @@ system. The agent talks to the Python CLI over subprocess (unchanged). The CLI
 optionally federates to a shared hub over HTTP.
 
 **Full design and implementation plan:**
-[`docs/HIVE-INTEGRATION.md`](docs/HIVE-INTEGRATION.md)
+[`docs/hive-integration.md`](docs/hive-integration.md)
 
 **Summary:** Python hub client in `cortex/encoder/core.py`, new `hive:` config block,
 `--hive-push` / `--hive-pull` / `--hive-status` CLI commands, `hive`

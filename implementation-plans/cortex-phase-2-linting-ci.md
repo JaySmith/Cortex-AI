@@ -280,7 +280,7 @@ jobs:
 Create or update:
 
 ```text
-docs/DEVELOPMENT.md
+docs/development.md
 ```
 
 Include:

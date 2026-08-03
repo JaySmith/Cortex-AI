@@ -109,11 +109,11 @@ The `cortex` CLI provides these commands for mid-conversation memory operations:
 VERSION                    Release version (SemVer)
 SCHEMA_VERSION             On-disk data contract version
 CHANGELOG.md               Release history + versioning rules
-ROADMAP.md                 Planned direction
+roadmap.md                 Planned direction
 cortex/                    Python package (CLI, encoder, platforms)
 skills/cortex-ai/          opencode skill template
 example-vault/             Starter vault — one note per tier
-docs/                      overview, QUICKSTART, CLI reference, etc.
+docs/                      overview, quickstart, CLI reference, etc.
 ```
 
 ## Docs
@@ -122,13 +122,13 @@ docs/                      overview, QUICKSTART, CLI reference, etc.
 - [docs/installation.md](docs/installation.md) — installation guide
 - [docs/cli-reference.md](docs/cli-reference.md) — CLI reference
 - [docs/memory-model.md](docs/memory-model.md) — tier system, note types, encoding
-- [docs/QUICKSTART.md](docs/QUICKSTART.md) — minimal productive path
-- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) — contributing: dev setup, dev loop, releasing
+- [docs/quickstart.md](docs/quickstart.md) — minimal productive path
+- [docs/development.md](docs/development.md) — contributing: dev setup, dev loop, releasing
 - [docs/troubleshooting.md](docs/troubleshooting.md) — common issues and fixes
 - [docs/migration.md](docs/migration.md) — schema version migration procedures
-- [docs/VAULT_SCHEMA.md](docs/VAULT_SCHEMA.md) — frontmatter reference
-- [docs/EXTENDING.md](docs/EXTENDING.md) — add custom output targets
-- [ROADMAP.md](ROADMAP.md) — planned direction for future releases
+- [docs/vault-schema.md](docs/vault-schema.md) — frontmatter reference
+- [docs/extending.md](docs/extending.md) — add custom output targets
+- [roadmap.md](roadmap.md) — planned direction for future releases
 
 ## Related
 

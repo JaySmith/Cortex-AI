@@ -367,7 +367,7 @@ Three-state logic:
 - `True` → always sync to hub, even if tier is not in `replicate_tiers`
 - `False` → never sync, even if tier is in `replicate_tiers`
 
-**File:** `docs/VAULT_SCHEMA.md` — document the new field:
+**File:** `docs/vault-schema.md` — document the new field:
 ```yaml
 ---
 id: my-note
@@ -548,7 +548,7 @@ Phase 8+ (ROADMAP items) ─── independent, parallel with everything
   - [ ] Add argparse entries
 - [ ] Phase 4: Hive frontmatter
   - [ ] Add `hive` field to `VaultNote`
-  - [ ] Update `docs/VAULT_SCHEMA.md`
+  - [ ] Update `docs/vault-schema.md`
 - [ ] Phase 5: MCP server hive proxy
   - [ ] Add env var parsing
   - [ ] Add `memory_write` hive push

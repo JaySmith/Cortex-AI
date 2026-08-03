@@ -169,7 +169,7 @@ cortex uninstall --vault <vault> --latest --apply  # revert
   drained. Added a standalone `purge` command to the `cortex-ai` skill.
 
 ### Docs
-- Added `ROADMAP.md` — planned direction for future releases (Cortex Hive remote
+- Added `roadmap.md` — planned direction for future releases (Cortex Hive remote
   vault federation, cross-platform parity, someday vector retrieval). Linked from
   the README repo-layout and Docs sections.
 

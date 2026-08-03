@@ -19,7 +19,7 @@ consolidated. `CORTEX_VAULT` env var and the `~/cortex-ai` default do not exist.
 `run_import` in `import_agent.py` still has no vault guard of its own — the guard
 only lives in `import_cmd`, so calling `run_import` directly (or via the standalone
 `main()`) bypasses it. The remaining work is the Option C design below; see
-`ROADMAP.md` for the v2.1.0 plan.
+`roadmap.md` for the v2.1.0 plan.
 
 ## Symptom
 

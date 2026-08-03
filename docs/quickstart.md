@@ -57,7 +57,7 @@ cortex memory search "preferences"
 - `cortex encode --dry-run` — preview changes before writing
 - `cortex import` — import existing agent context
 - `cortex doctor` — validate all platform integrations
-- Read [VAULT_SCHEMA.md](./VAULT_SCHEMA.md) for frontmatter reference
+- Read [vault-schema.md](./vault-schema.md) for frontmatter reference
 - Read [overview.md](./overview.md) for how Cortex works
 
 ## Troubleshooting

@@ -7,14 +7,14 @@
 
 ## Symptom
 
-`cortex version` reports `1.4.0`. The `CHANGELOG.md` and `ROADMAP.md` both
+`cortex version` reports `1.4.0`. The `CHANGELOG.md` and `roadmap.md` both
 describe `2.0.0` as shipped on 2026-07-20. Any consumer of `VERSION` —
 `cortex version`, the encode `--check` output, upgrade-safety comparisons,
 and the MCP server's `serverInfo.version` — is reporting the wrong value.
 
 ## Root cause
 
-The 2.0.0 release updated `CHANGELOG.md` and `ROADMAP.md` but did not bump the
+The 2.0.0 release updated `CHANGELOG.md` and `roadmap.md` but did not bump the
 three files that actually carry the version at runtime:
 
 | File | Current | Should be |
