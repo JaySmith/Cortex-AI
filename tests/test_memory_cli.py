@@ -28,9 +28,20 @@ def _write_memory_json(vault_root: Path, notes: dict) -> Path:
     return path
 
 
+# Canonical top-level dir per note type (mirrors cortex.cli.main._TYPE_DIR_MAP).
+_TYPE_DIR = {
+    "knowledge": "knowledge",
+    "entity": "entities",
+    "feedback": "feedback",
+    "decision": "decisions",
+    "log": "logs",
+    "session": "logs",
+}
+
+
 def _create_note_file(vault_root: Path, note_id: str, note_type: str, body: str = "") -> Path:
-    """Create a raw vault note .md file."""
-    type_dir = vault_root / f"{note_type}s"
+    """Create a raw vault note .md file in the canonical type directory."""
+    type_dir = vault_root / _TYPE_DIR.get(note_type, f"{note_type}s")
     type_dir.mkdir(parents=True, exist_ok=True)
     path = type_dir / f"{note_id}.md"
     content = (
@@ -139,7 +150,7 @@ class TestMemoryWrite:
         assert result.exit_code == 0
         assert "Created note" in result.stdout
 
-        note_path = vault / "knowledges" / "test-note.md"
+        note_path = vault / "knowledge" / "test-note.md"
         assert note_path.exists()
         content = note_path.read_text(encoding="utf-8")
         assert "id: test-note" in content
@@ -169,7 +180,7 @@ class TestMemoryWrite:
         assert result.exit_code == 0
         assert "body: included" in result.stdout
 
-        note_path = vault / "feedbacks" / "body-note.md"
+        note_path = vault / "feedback" / "body-note.md"
         assert note_path.exists()
         content = note_path.read_text(encoding="utf-8")
         assert "This is the body content." in content
@@ -198,10 +209,77 @@ class TestMemoryWrite:
         assert result.exit_code == 0
         assert "body: included" in result.stdout
 
-        note_path = vault / "knowledges" / "file-body-note.md"
+        note_path = vault / "knowledge" / "file-body-note.md"
         assert note_path.exists()
         content = note_path.read_text(encoding="utf-8")
         assert "Body from file." in content
+
+    def test_write_entity_uses_entities_dir(self, vault):
+        """`entity` maps to entities/, not the buggy `entitys/`."""
+        result = runner.invoke(
+            app,
+            [
+                "memory", "write",
+                "--title", "Some Entity",
+                "--type", "entity",
+                "--tier", "project",
+                "--vault", str(vault),
+            ],
+        )
+        assert result.exit_code == 0
+        assert (vault / "entities" / "some-entity.md").exists()
+        assert not (vault / "entitys" / "some-entity.md").exists()
+
+    def test_write_new_note_nests_under_category(self, vault):
+        """A new note with --category lands in <type-dir>/<category>/."""
+        result = runner.invoke(
+            app,
+            [
+                "memory", "write",
+                "--title", "Categorized Note",
+                "--type", "knowledge",
+                "--tier", "core",
+                "--category", "patterns",
+                "--body", "Body.",
+                "--vault", str(vault),
+            ],
+        )
+        assert result.exit_code == 0
+        assert (vault / "knowledge" / "patterns" / "categorized-note.md").exists()
+
+    def test_write_update_finds_note_in_category_subdir(self, vault):
+        """--update patches a note nested under <type>/<category>/ regardless of layout.
+
+        Regression test: previously --update only looked in <type>s/<id>.md and
+        failed for notes that live under a category subdirectory.
+        """
+        nested_dir = vault / "knowledge" / "patterns"
+        nested_dir.mkdir(parents=True, exist_ok=True)
+        note_path = nested_dir / "nested-note.md"
+        note_path.write_text(
+            "---\nid: nested-note\ntype: knowledge\ncategory: patterns\n---\n\nOriginal.\n",
+            encoding="utf-8",
+        )
+        result = runner.invoke(
+            app,
+            [
+                "memory", "write",
+                "--title", "Nested Note",
+                "--type", "knowledge",
+                "--tier", "core",
+                "--category", "patterns",
+                "--body", "Patched.",
+                "--update",
+                "--vault", str(vault),
+            ],
+        )
+        assert result.exit_code == 0
+        assert "Updated note" in result.stdout
+        # Patched in place — no stray knowledges/ file created.
+        content = note_path.read_text(encoding="utf-8")
+        assert "Patched." in content
+        assert "Original." not in content
+        assert not (vault / "knowledges").exists()
 
     def test_write_update_existing(self, vault):
         """Patches existing note body with --update."""
@@ -227,7 +305,7 @@ class TestMemoryWrite:
         assert result.exit_code == 0
         assert "Updated note" in result.stdout
 
-        note_path = vault / "knowledges" / "updatable-note.md"
+        note_path = vault / "knowledge" / "updatable-note.md"
         content = note_path.read_text(encoding="utf-8")
         assert "Updated body." in content
         assert "Original body." not in content
@@ -299,7 +377,7 @@ class TestMemoryWrite:
             ],
         )
         assert result.exit_code == 0
-        note_path = vault / "knowledges" / "no-encode.md"
+        note_path = vault / "knowledge" / "no-encode.md"
         assert note_path.exists()
 
     def test_write_conflicting_body_options(self, vault):

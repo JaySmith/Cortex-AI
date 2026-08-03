@@ -960,6 +960,51 @@ def _scan_vault_for_note(vault_root: Path, note_id: str) -> Path | None:
     return None
 
 
+# Canonical type -> top-level vault directory. English plurals are irregular, so a
+# naive `type + "s"` is wrong (e.g. "knowledge" -> "knowledges", "entity" -> "entitys").
+# Only listed types get a fixed directory; anything else falls through to the
+# generic rule below.
+_TYPE_DIR_MAP = {
+    "knowledge": "knowledge",  # mass noun — stays singular
+    "entity": "entities",
+    "feedback": "feedback",  # mass noun — stays singular
+    "decision": "decisions",
+    "log": "logs",
+    "session": "logs",  # sessions live alongside logs
+}
+
+
+def _type_dir_name(note_type: str) -> str:
+    """Map a note type to its canonical top-level directory name."""
+    if note_type in _TYPE_DIR_MAP:
+        return _TYPE_DIR_MAP[note_type]
+    # Generic fallback for unknown types: proper English pluralization.
+    if note_type.endswith("s"):
+        return note_type
+    if note_type.endswith("y") and note_type[-2:-1] not in "aeiou":
+        return note_type[:-1] + "ies"
+    return note_type + "s"
+
+
+def _resolve_note_path(
+    vault_path: Path, note_id: str, note_type: str, category: str | None
+) -> tuple[Path, bool]:
+    """Resolve where a note lives (for update) or should be created (for new).
+
+    Returns (path, exists). For updates, the note is located anywhere in the vault
+    by its id via rglob, so it is patched in place regardless of directory layout.
+    For new notes, the path is built as <vault>/<type-dir>[/<category>]/<id>.md.
+    """
+    existing = _scan_vault_for_note(vault_path, note_id)
+    if existing is not None:
+        return existing, True
+
+    target_dir = vault_path / _type_dir_name(note_type)
+    if category:
+        target_dir = target_dir / category
+    return target_dir / f"{note_id}.md", False
+
+
 def _print_note(note_id: str, note: dict) -> None:
     """Pretty-print a note dict from memory.json."""
     typer.echo(f"# {note_id}")
@@ -1230,13 +1275,15 @@ def write(
     tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
 
     if root:
+        # Flat file at the vault root (e.g. Learnings.md).
         note_path = vault_path / f"{note_id}.md"
+        exists = note_path.exists()
     else:
-        target_dir = vault_path / note_type
-        target_dir.mkdir(parents=True, exist_ok=True)
-        note_path = target_dir / f"{note_id}.md"
+        # Locate an existing note by id anywhere in the vault; otherwise build the
+        # canonical creation path (<type-dir>[/<category>]/<id>.md).
+        note_path, exists = _resolve_note_path(vault_path, note_id, note_type, category)
 
-    if note_path.exists():
+    if exists:
         if not update:
             _error(
                 f"Note already exists at {note_path}",
@@ -1244,9 +1291,7 @@ def write(
                 "Use --update to patch the existing note, or use a different --title.",
             )
             raise typer.Exit(code=1)
-        # Update mode: patch body and bump date
-        existing = note_path.read_text(encoding="utf-8")
-        frontmatter, _ = _split_frontmatter(existing)
+        # Update mode: patch body and bump date, preserving the note's location.
         body_text = _read_body(body, body_file)
         new_content = _build_note_content(
             note_id, note_type, tier, title, today, category, tag_list, body_text
@@ -1256,11 +1301,12 @@ def write(
     else:
         if update:
             _error(
-                f"Note does not exist at {note_path}",
+                f"Note does not exist (searched vault for id '{note_id}')",
                 "--update was passed but no existing note was found.",
                 "Remove --update to create a new note, or check the --title value.",
             )
             raise typer.Exit(code=1)
+        note_path.parent.mkdir(parents=True, exist_ok=True)
         body_text = _read_body(body, body_file)
         content = _build_note_content(
             note_id, note_type, tier, title, today, category, tag_list, body_text
