@@ -105,6 +105,40 @@ Cortex runs on all three platforms.
 
 ---
 
+## Future — fix `cortex lint --fix` (auto-fix does not persist)
+
+The "Shipped — vault lint" table above advertises auto-fix for `type`, `tier`,
+and `aliases`, but the auto-fixer does not reliably resolve issues in practice.
+Observed on a real vault (2026-07-22): `cortex lint --fix` (both full-vault and
+`--note`-scoped) left the fixable count essentially unchanged across repeated
+runs. Two concrete defects:
+
+1. **Empty-list "fix" fails its own rule.** For `missing-aliases`, the fixer
+   writes `aliases: []` (an empty list), which the `missing-aliases` rule still
+   flags as missing — so the count never drops.
+2. **Report prints pre-fix state.** The lint report is emitted before the fix is
+   applied in the same run, so a successful write looks like a no-op. Combined
+   with (1), it's unclear whether anything was written.
+
+The manual workaround is to edit frontmatter by hand (real `id`/`type`/`tier`
+values and non-empty `aliases`), then `cortex encode` and re-lint.
+
+**Fixes to make:**
+- `missing-aliases` auto-fix should derive a real alias from the id/title (title-
+  cased slug), not write `aliases: []`.
+- Emit the lint report *after* applying `--fix`, or clearly label pre/post state.
+- Add a regression test that asserts the fixable count strictly decreases after
+  `--fix` on a dirty fixture.
+- Consider: files with no frontmatter at all (e.g. auto-generated `PORTFOLIO.md`,
+  `Cortex-Overview.md`) are scanned as notes and can't be auto-fixed — add a
+  lint-ignore mechanism (config glob or a header marker) instead of grafting
+  metadata onto generated docs.
+
+**Implementation:** `cortex/cli/lint.py` (fixer + report ordering),
+`cortex/vault/links.py` if link-fix behavior is touched.
+
+---
+
 ## Future — enhanced retrieval (only if keyword proves insufficient)
 
 The keyword scorer handles canonical queries well. Cortex's curated vocabulary
