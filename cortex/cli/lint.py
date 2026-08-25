@@ -554,8 +554,11 @@ def _fix_non_slug_id(note: VaultNote) -> None:
 def _find_vault_path(vault_arg: str | None) -> Path | None:
     """Shared vault path resolution (duplicated from main.py to keep lint standalone)."""
     if vault_arg:
+        # An explicit --vault is trusted: lint operates on the vault's notes and
+        # does not need cortex.yaml (which is an install artifact, absent from a
+        # fresh or example vault). Only require that the path is a real directory.
         p = Path(vault_arg).expanduser().resolve()
-        if p.exists() and (p / "_sync" / "cortex.yaml").exists():
+        if p.is_dir():
             return p
         return None
     cwd = Path.cwd()
