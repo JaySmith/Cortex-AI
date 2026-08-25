@@ -463,3 +463,136 @@ class TestMemorySearch:
         assert result.exit_code == 0
         assert "python-style" in result.stdout
         assert "typescript-style" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# cortex memory delete
+# ---------------------------------------------------------------------------
+
+
+class TestMemoryDelete:
+    def test_delete_with_yes_removes_file(self, vault):
+        """--yes deletes the note file without prompting."""
+        _create_note_file(vault, "doomed-note", "knowledge", body="Delete me.")
+        note_path = vault / "knowledge" / "doomed-note.md"
+        assert note_path.exists()
+
+        result = runner.invoke(
+            app, ["memory", "delete", "doomed-note", "--yes", "--vault", str(vault)]
+        )
+        assert result.exit_code == 0
+        assert "Deleted note" in result.stdout
+        assert not note_path.exists()
+
+    def test_delete_prunes_memory_json(self, vault):
+        """Delete removes the note entry and its graph edges from memory.json."""
+        _create_note_file(vault, "linked-note", "knowledge", body="Linked.")
+        _write_memory_json(
+            vault,
+            {
+                "linked-note": {
+                    "id": "linked-note",
+                    "type": "knowledge",
+                    "tier": "core",
+                    "aliases": ["Linked Note"],
+                    "content": "Linked.",
+                },
+                "other-note": {
+                    "id": "other-note",
+                    "type": "knowledge",
+                    "tier": "core",
+                    "aliases": ["Other Note"],
+                    "content": "Other.",
+                },
+            },
+        )
+        # Add graph edges referencing the note both ways.
+        mem_path = vault / "_sync" / "encoded" / "memory.json"
+        data = json.loads(mem_path.read_text(encoding="utf-8"))
+        data["_graph"] = {
+            "adjacency": {
+                "linked-note": ["other-note"],
+                "other-note": ["linked-note"],
+            },
+            "edges": [
+                {"source": "linked-note", "target": "other-note"},
+                {"source": "other-note", "target": "linked-note"},
+            ],
+        }
+        mem_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+        result = runner.invoke(
+            app, ["memory", "delete", "linked-note", "--yes", "--vault", str(vault)]
+        )
+        assert result.exit_code == 0
+
+        data = json.loads(mem_path.read_text(encoding="utf-8"))
+        assert "linked-note" not in data["notes"]
+        assert "other-note" in data["notes"]
+        assert data["_meta"]["count"] == 1
+        adjacency = data["_graph"]["adjacency"]
+        assert "linked-note" not in adjacency
+        assert "linked-note" not in adjacency.get("other-note", [])
+        edges = data["_graph"]["edges"]
+        assert all(
+            e["source"] != "linked-note" and e["target"] != "linked-note" for e in edges
+        )
+
+    def test_delete_nonexistent_fails(self, vault):
+        """Deleting a note that does not exist raises an error."""
+        result = runner.invoke(
+            app, ["memory", "delete", "no-such-note", "--yes", "--vault", str(vault)]
+        )
+        assert result.exit_code == 1
+        assert "not found" in result.stdout.lower() or "not found" in result.stderr.lower()
+
+    def test_delete_aborts_on_no_confirmation(self, vault):
+        """Answering 'n' to the prompt keeps the file."""
+        _create_note_file(vault, "keep-note", "knowledge", body="Keep me.")
+        note_path = vault / "knowledge" / "keep-note.md"
+
+        result = runner.invoke(
+            app, ["memory", "delete", "keep-note", "--vault", str(vault)], input="n\n"
+        )
+        assert result.exit_code == 0
+        assert "Aborted" in result.stdout
+        assert note_path.exists()
+
+    def test_delete_confirms_and_deletes(self, vault):
+        """Answering 'y' to the prompt deletes the file."""
+        _create_note_file(vault, "confirm-note", "knowledge", body="Bye.")
+        note_path = vault / "knowledge" / "confirm-note.md"
+
+        result = runner.invoke(
+            app, ["memory", "delete", "confirm-note", "--vault", str(vault)], input="y\n"
+        )
+        assert result.exit_code == 0
+        assert "Deleted note" in result.stdout
+        assert not note_path.exists()
+
+    def test_delete_no_encode_skips_pruning(self, vault):
+        """--no-encode deletes the file but leaves memory.json untouched."""
+        _create_note_file(vault, "stale-note", "knowledge", body="Stale.")
+        _write_memory_json(
+            vault,
+            {
+                "stale-note": {
+                    "id": "stale-note",
+                    "type": "knowledge",
+                    "tier": "core",
+                    "aliases": ["Stale Note"],
+                    "content": "Stale.",
+                }
+            },
+        )
+        result = runner.invoke(
+            app,
+            ["memory", "delete", "stale-note", "--yes", "--no-encode", "--vault", str(vault)],
+        )
+        assert result.exit_code == 0
+        assert not (vault / "knowledge" / "stale-note.md").exists()
+
+        mem_path = vault / "_sync" / "encoded" / "memory.json"
+        data = json.loads(mem_path.read_text(encoding="utf-8"))
+        # Entry left intact because pruning was skipped.
+        assert "stale-note" in data["notes"]

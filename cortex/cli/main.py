@@ -13,6 +13,7 @@ All user-facing operations consolidated behind a single CLI:
    cortex memory get      Fetch a single note by id
    cortex memory list     List all notes with type, tier, alias
    cortex memory write    Write a memory note to the vault
+   cortex memory delete   Delete a memory note from the vault
   cortex import          Import existing agent context
   cortex version         Print version information
 """
@@ -49,7 +50,7 @@ app = typer.Typer(
 )
 memory_app = typer.Typer(
     name="memory",
-    help="Search and write vault memory",
+    help="Search, write, and delete vault memory",
     no_args_is_help=True,
 )
 app.add_typer(memory_app, name="memory")
@@ -1336,6 +1337,54 @@ def write(
 
 
 @memory_app.command()
+def delete(
+    note_id: str = typer.Argument(..., help="Note id slug to delete (e.g. 'askdel')"),
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="Skip the confirmation prompt"
+    ),
+    no_encode: bool = typer.Option(
+        False, "--no-encode", help="Skip pruning memory.json after delete"
+    ),
+    vault: str | None = typer.Option(None, "--vault", help="Vault path (auto-detect by default)"),
+) -> None:
+    """Delete a memory note from the vault and prune it from memory.json.
+
+    Locates the note file by its id anywhere in the vault, removes it, and
+    (unless --no-encode) drops the entry and any graph edges from memory.json.
+    """
+    vault_path = _find_vault_path(vault)
+    if not vault_path or not vault_path.exists():
+        _error(
+            "Vault not found",
+            "A vault directory is required to delete notes from.",
+            "Run 'cortex install' first, or pass --vault to specify the vault path.",
+        )
+        raise typer.Exit(code=1)
+
+    note_path = _scan_vault_for_note(vault_path, note_id)
+    if note_path is None:
+        _error(
+            f"Note '{note_id}' not found in vault",
+            f"No file named {note_id}.md found in {vault_path}",
+            "Check the id for typos. Use 'cortex memory search' to find available notes.",
+        )
+        raise typer.Exit(code=1)
+
+    if not yes:
+        confirmed = typer.confirm(f"Delete note '{note_id}' at {note_path}?")
+        if not confirmed:
+            typer.echo("Aborted. No changes made.")
+            raise typer.Exit(code=0)
+
+    note_path.unlink()
+    typer.echo(f"Deleted note: {note_path}")
+    typer.echo(f"  id: {note_id}")
+
+    if not no_encode:
+        _remove_from_memory_json_inline(vault_root=vault_path, note_id=note_id)
+
+
+@memory_app.command()
 def related(
     note_id: str = typer.Argument(..., help="Note id slug to find related notes for"),
     limit: int = typer.Option(5, "--limit", "-n", help="Max related notes to return"),
@@ -1706,6 +1755,53 @@ def _update_memory_json_inline(
         ]
         for target in targets:
             graph["edges"].append({"source": note_id, "target": target})
+
+    mem_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _remove_from_memory_json_inline(vault_root: Path, note_id: str) -> None:
+    """Inline removal of a note from memory.json after a delete — no full encode needed.
+
+    Drops the note entry and prunes any _graph edges referencing it (both forward
+    and reverse), mirroring the upsert logic in _update_memory_json_inline.
+    """
+    mem_path = vault_root / "_sync" / "encoded" / "memory.json"
+    if not mem_path.exists():
+        return
+
+    try:
+        data = json.loads(mem_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+
+    notes = data.setdefault("notes", {})
+    if note_id not in notes:
+        # Nothing indexed for this id; still prune any dangling graph edges below.
+        pass
+    else:
+        del notes[note_id]
+
+    # Update meta count
+    meta = data.setdefault("_meta", {})
+    meta["count"] = len(notes)
+
+    graph = data.setdefault("_graph", {})
+    adjacency = graph.setdefault("adjacency", {})
+
+    # Drop this note's forward edges.
+    adjacency.pop(note_id, None)
+
+    # Drop reverse edges pointing at this note.
+    for key in list(adjacency):
+        adjacency[key] = [n for n in adjacency[key] if n != note_id]
+        if not adjacency[key]:
+            del adjacency[key]
+
+    # Prune the edges list if present.
+    if "edges" in graph:
+        graph["edges"] = [
+            e for e in graph["edges"] if e["source"] != note_id and e["target"] != note_id
+        ]
 
     mem_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
