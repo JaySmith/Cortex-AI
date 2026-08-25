@@ -21,10 +21,4 @@ when issues are opened or closed.
 - [ ] **Wave 2: GitHub Copilot platform asset generation** —
   [#4](https://github.com/JaySmith/cortex-ai/issues/4).
   `CopilotInstaller.install()` is a no-op stub (`cortex/platforms/copilot.py:26`).
-
-## Pre-existing
-
-- [ ] **`memory write` fixes** —
-  [#1](https://github.com/JaySmith/cortex-ai/issues/1). `--update` can't find
-  notes; `--category` ignored; type dir mis-pluralized.
 </content>
