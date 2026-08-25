@@ -21,6 +21,7 @@ All user-facing operations consolidated behind a single CLI:
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import shutil
@@ -1652,33 +1653,62 @@ def _jaccard_words(a: str, b: str) -> float:
     return inter / union if union else 0.0
 
 
+def _tag_idf(notes: dict) -> dict[str, float]:
+    """Inverse-document-frequency weight per tag.
+
+    A tag on almost every note (e.g. 'project', 'fy26', 'jira') carries little
+    signal about whether two specific notes are duplicates, so it is down-weighted.
+    A rare tag shared by two notes is a strong signal. Weight = ln(N / df), so a
+    tag appearing on every note weighs ~0 and a tag on 2 of 80 notes weighs ~3.7.
+    """
+    n = max(len(notes), 1)
+    df: dict[str, int] = {}
+    for note in notes.values():
+        for t in set(note.get("tags", [])):
+            df[t] = df.get(t, 0) + 1
+    return {t: math.log(n / d) for t, d in df.items()}
+
+
 def _pair_score(
     nid_a: str,
     a: dict,
     nid_b: str,
     b: dict,
     adjacency: dict[str, list[str]],
+    tag_idf: dict[str, float] | None = None,
 ) -> int:
-    """Similarity score between two notes, reusing the `related` weights plus a
-    content-overlap signal.
+    """Similarity score between two notes, weighted toward genuine duplication.
+
+    Content overlap dominates because real duplicates say the same thing. Shared
+    tags are IDF-weighted so ubiquitous tags ('project', 'jira') barely count while
+    rare shared tags matter. Category/type are weak tie-breakers, not bridges.
 
       wiki-link neighbor  +20
-      each shared tag     +4
-      same category       +3
+      content overlap     +round(jaccard * 30), capped at 30   (dominant signal)
+      shared tags         +round(sum(idf) * 3)                 (IDF-weighted)
+      same category       +2
       same type           +1
-      content overlap     +round(jaccard * 10), capped at 15
+
+    Passing tag_idf=None falls back to a flat weight of 1.0 per shared tag (used
+    only by unit tests that exercise a single pair in isolation).
     """
     score = 0
     if nid_b in set(adjacency.get(nid_a, [])):
         score += 20
-    tag_overlap = len(set(a.get("tags", [])) & set(b.get("tags", [])))
-    score += tag_overlap * 4
+
+    overlap = _jaccard_words(a.get("content", ""), b.get("content", ""))
+    score += min(round(overlap * 30), 30)
+
+    shared_tags = set(a.get("tags", [])) & set(b.get("tags", []))
+    if tag_idf is None:
+        score += len(shared_tags) * 1
+    else:
+        score += round(sum(tag_idf.get(t, 0.0) for t in shared_tags) * 3)
+
     if a.get("category", "") and a.get("category", "") == b.get("category", ""):
-        score += 3
+        score += 2
     if a.get("type", "") and a.get("type", "") == b.get("type", ""):
         score += 1
-    overlap = _jaccard_words(a.get("content", ""), b.get("content", ""))
-    score += min(round(overlap * 10), 15)
     return score
 
 
@@ -1686,10 +1716,17 @@ def _cluster_notes(
     ids: list[str],
     pair_scores: dict[tuple[str, str], int],
     threshold: int,
+    max_cluster_size: int = 6,
 ) -> list[list[str]]:
-    """Single-linkage clustering via union-find over pairs scoring >= threshold.
+    """Cluster notes from qualifying pairs, guarding against runaway chains.
 
-    Returns clusters with 2+ members, each member list kept in the input order.
+    Uses single-linkage union-find over pairs scoring >= threshold, but any
+    connected component larger than max_cluster_size is treated as noise (a weak
+    bridge chaining unrelated notes) and split back into its strongest pairs
+    instead of one giant blob. This prevents the whole vault collapsing into a
+    single 'cluster' when many notes share a common tag.
+
+    Returns clusters with 2+ members, ordered by input order within each cluster.
     """
     parent: dict[str, str] = {i: i for i in ids}
 
@@ -1704,14 +1741,40 @@ def _cluster_notes(
         if rx != ry:
             parent[rx] = ry
 
-    for (a, b), score in pair_scores.items():
-        if score >= threshold:
-            union(a, b)
+    qualifying = {pair: s for pair, s in pair_scores.items() if s >= threshold}
+    for a, b in qualifying:
+        union(a, b)
 
     groups: dict[str, list[str]] = {}
     for i in ids:
         groups.setdefault(find(i), []).append(i)
-    return [members for members in groups.values() if len(members) >= 2]
+
+    clusters: list[list[str]] = []
+    for members in groups.values():
+        if len(members) < 2:
+            continue
+        if len(members) <= max_cluster_size:
+            clusters.append(members)
+            continue
+        # Runaway component: keep only tight pairs. Emit each qualifying pair whose
+        # score is at least 2x the threshold as its own two-note cluster, so we
+        # surface the genuinely-similar pairs and drop the weak bridges.
+        strong = sorted(
+            (
+                (s, pair)
+                for pair, s in qualifying.items()
+                if pair[0] in members and pair[1] in members and s >= threshold * 2
+            ),
+            reverse=True,
+        )
+        seen: set[str] = set()
+        for _s, (a, b) in strong:
+            if a in seen or b in seen:
+                continue
+            clusters.append([a, b] if ids.index(a) < ids.index(b) else [b, a])
+            seen.add(a)
+            seen.add(b)
+    return clusters
 
 
 def _slug_root(note_id: str) -> str:
@@ -1885,9 +1948,12 @@ def _delete_note(vault_path: Path, note_id: str) -> bool:
 @memory_app.command()
 def compact(
     threshold: int = typer.Option(
-        5, "--threshold", "-t", help="Minimum similarity score to form a cluster"
+        8, "--threshold", "-t", help="Minimum similarity score to form a cluster"
     ),
     limit: int = typer.Option(20, "--limit", "-n", help="Max clusters to present"),
+    max_cluster_size: int = typer.Option(
+        6, "--max-cluster-size", help="Components larger than this are split into strong pairs"
+    ),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show clusters, make no changes"),
     include_vault_only: bool = typer.Option(
         False, "--include-vault-only", help="Also sweep vault-only and drained notes"
@@ -1940,6 +2006,7 @@ def compact(
         return
 
     adjacency: dict[str, list[str]] = data.get("_graph", {}).get("adjacency", {})
+    tag_idf = _tag_idf(notes)
 
     # Phase: score every unique pair.
     ids = list(notes.keys())
@@ -1947,11 +2014,11 @@ def compact(
     for i in range(len(ids)):
         for j in range(i + 1, len(ids)):
             a_id, b_id = ids[i], ids[j]
-            score = _pair_score(a_id, notes[a_id], b_id, notes[b_id], adjacency)
+            score = _pair_score(a_id, notes[a_id], b_id, notes[b_id], adjacency, tag_idf)
             if score >= threshold:
                 pair_scores[(a_id, b_id)] = score
 
-    clusters = _cluster_notes(ids, pair_scores, threshold)
+    clusters = _cluster_notes(ids, pair_scores, threshold, max_cluster_size)
     if not clusters:
         typer.echo(
             f"No overlapping clusters found at threshold {threshold}. Vault looks tidy."

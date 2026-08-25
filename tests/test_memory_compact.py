@@ -12,6 +12,7 @@ from cortex.cli.main import (
     _jaccard_words,
     _pair_score,
     _slug_root,
+    _tag_idf,
     app,
 )
 
@@ -121,26 +122,38 @@ class TestPairScore:
         # +20 link, +1 same type, +0 empty category
         assert score >= 20
 
-    def test_shared_tags_scored(self):
+    def test_shared_tags_flat_weight_without_idf(self):
+        # With tag_idf=None each shared tag contributes a flat +1.
         a = _note("a", tags=["jira", "workflow"])
         b = _note("b", tags=["jira", "workflow"])
         score = _pair_score("a", a, "b", b, {})
-        # 2 shared tags * 4 = 8, +1 same type
-        assert score >= 8
+        # 2 shared tags * 1 = 2, +1 same type = 3
+        assert score == 3
+
+    def test_shared_tags_idf_weighted(self):
+        # A rare shared tag (high idf) scores much higher than a common one.
+        a = _note("a", tags=["rare"])
+        b = _note("b", tags=["rare"])
+        idf = {"rare": 3.0, "common": 0.01}
+        rare_score = _pair_score("a", a, "b", b, {}, idf)
+        a2 = _note("a", tags=["common"])
+        b2 = _note("b", tags=["common"])
+        common_score = _pair_score("a", a2, "b", b2, {}, idf)
+        assert rare_score > common_score
 
     def test_same_category_and_type(self):
         a = _note("a", category="patterns")
         b = _note("b", category="patterns")
         score = _pair_score("a", a, "b", b, {})
-        assert score >= 4  # +3 category +1 type
+        assert score == 3  # +2 category +1 type
 
-    def test_content_overlap_capped_at_fifteen(self):
+    def test_content_overlap_dominates_capped_at_thirty(self):
         shared = " ".join(f"word{i}" for i in range(100))
         a = _note("a", content=shared)
         b = _note("b", content=shared)
         score = _pair_score("a", a, "b", b, {})
-        # identical content -> jaccard 1.0 -> +10 (round(1.0*10)); +1 same type
-        assert score == 11
+        # identical content -> jaccard 1.0 -> +30 (capped); +1 same type
+        assert score == 31
 
     def test_empty_category_not_matched(self):
         a = _note("a", category="")
@@ -148,6 +161,20 @@ class TestPairScore:
         score = _pair_score("a", a, "b", b, {})
         # only +1 same type; empty categories must NOT count as a match
         assert score == 1
+
+
+class TestTagIdf:
+    def test_ubiquitous_tag_weighs_near_zero(self):
+        notes = {f"n{i}": _note(f"n{i}", tags=["everywhere"]) for i in range(10)}
+        idf = _tag_idf(notes)
+        assert idf["everywhere"] == 0.0  # ln(10/10) = 0
+
+    def test_rare_tag_weighs_more_than_common(self):
+        notes = {f"n{i}": _note(f"n{i}", tags=["common"]) for i in range(10)}
+        notes["n0"]["tags"] = ["common", "rare"]
+        notes["n1"]["tags"] = ["common", "rare"]
+        idf = _tag_idf(notes)
+        assert idf["rare"] > idf["common"]
 
 
 # ---------------------------------------------------------------------------
@@ -178,6 +205,31 @@ class TestClustering:
         pairs = {("a", "b"): 10, ("c", "d"): 10}
         clusters = _cluster_notes(["a", "b", "c", "d"], pairs, threshold=5)
         assert len(clusters) == 2
+
+    def test_runaway_component_split_into_strong_pairs(self):
+        # A weak chain a-b-c-d-e-f-g (7 notes) bridged at exactly the threshold
+        # should NOT be returned as one giant cluster. With a small size cap it is
+        # split back into strong (>=2x threshold) pairs only.
+        ids = ["a", "b", "c", "d", "e", "f", "g"]
+        # Weak bridges at threshold 5 chain everything together...
+        pairs = {
+            ("a", "b"): 5, ("b", "c"): 5, ("c", "d"): 5,
+            ("d", "e"): 5, ("e", "f"): 5, ("f", "g"): 5,
+        }
+        # ...but a and b are ALSO strongly similar (>= 2x threshold).
+        pairs[("a", "b")] = 20
+        clusters = _cluster_notes(ids, pairs, threshold=5, max_cluster_size=4)
+        # No cluster should contain the whole chain.
+        assert all(len(c) <= 4 for c in clusters)
+        # The strong pair survives.
+        assert any(set(c) == {"a", "b"} for c in clusters)
+
+    def test_component_at_size_limit_kept_whole(self):
+        # A 3-note component with max_cluster_size=6 stays intact.
+        pairs = {("a", "b"): 10, ("b", "c"): 10}
+        clusters = _cluster_notes(["a", "b", "c"], pairs, threshold=5, max_cluster_size=6)
+        assert len(clusters) == 1
+        assert set(clusters[0]) == {"a", "b", "c"}
 
 
 # ---------------------------------------------------------------------------
