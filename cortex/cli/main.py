@@ -1626,6 +1626,438 @@ def think(
                "If gaps exist, explicitly note what the vault doesn't know.")
 
 
+# Common English stop words filtered out before measuring content overlap, so the
+# Jaccard similarity reflects meaningful terms rather than grammatical glue.
+_STOP_WORDS = frozenset(
+    """a an and are as at be but by for from has have how if in into is it its of on
+    or that the their then there these this to was were what when where which who will
+    with you your we our not no do does can may""".split()
+)
+
+
+def _content_words(text: str) -> set[str]:
+    """Lowercase alphanumeric tokens of length >= 3, minus stop words."""
+    tokens = re.findall(r"[a-z0-9]+", text.lower())
+    return {t for t in tokens if len(t) >= 3 and t not in _STOP_WORDS}
+
+
+def _jaccard_words(a: str, b: str) -> float:
+    """Jaccard similarity of the meaningful word sets of two note bodies (0.0-1.0)."""
+    wa = _content_words(a)
+    wb = _content_words(b)
+    if not wa or not wb:
+        return 0.0
+    inter = len(wa & wb)
+    union = len(wa | wb)
+    return inter / union if union else 0.0
+
+
+def _pair_score(
+    nid_a: str,
+    a: dict,
+    nid_b: str,
+    b: dict,
+    adjacency: dict[str, list[str]],
+) -> int:
+    """Similarity score between two notes, reusing the `related` weights plus a
+    content-overlap signal.
+
+      wiki-link neighbor  +20
+      each shared tag     +4
+      same category       +3
+      same type           +1
+      content overlap     +round(jaccard * 10), capped at 15
+    """
+    score = 0
+    if nid_b in set(adjacency.get(nid_a, [])):
+        score += 20
+    tag_overlap = len(set(a.get("tags", [])) & set(b.get("tags", [])))
+    score += tag_overlap * 4
+    if a.get("category", "") and a.get("category", "") == b.get("category", ""):
+        score += 3
+    if a.get("type", "") and a.get("type", "") == b.get("type", ""):
+        score += 1
+    overlap = _jaccard_words(a.get("content", ""), b.get("content", ""))
+    score += min(round(overlap * 10), 15)
+    return score
+
+
+def _cluster_notes(
+    ids: list[str],
+    pair_scores: dict[tuple[str, str], int],
+    threshold: int,
+) -> list[list[str]]:
+    """Single-linkage clustering via union-find over pairs scoring >= threshold.
+
+    Returns clusters with 2+ members, each member list kept in the input order.
+    """
+    parent: dict[str, str] = {i: i for i in ids}
+
+    def find(x: str) -> str:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(x: str, y: str) -> None:
+        rx, ry = find(x), find(y)
+        if rx != ry:
+            parent[rx] = ry
+
+    for (a, b), score in pair_scores.items():
+        if score >= threshold:
+            union(a, b)
+
+    groups: dict[str, list[str]] = {}
+    for i in ids:
+        groups.setdefault(find(i), []).append(i)
+    return [members for members in groups.values() if len(members) >= 2]
+
+
+def _slug_root(note_id: str) -> str:
+    """Strip a trailing -<digits> or -vN suffix so 'jira-workflow-2026' shares a root
+    with 'jira-workflow'. Used only as a contradiction heuristic."""
+    return re.sub(r"-(?:v?\d+)$", "", note_id)
+
+
+def _days_between(a: str, b: str) -> int | None:
+    """Absolute day gap between two YYYY-MM-DD strings, or None if unparseable."""
+    try:
+        da = datetime.strptime(a, "%Y-%m-%d")
+        db = datetime.strptime(b, "%Y-%m-%d")
+    except (ValueError, TypeError):
+        return None
+    return abs((da - db).days)
+
+
+def _flag_conflict(cluster: list[str], notes: dict) -> bool:
+    """Heuristic: does this cluster likely contain contradictory/superseding notes?
+
+    Fires if any pair (a) shares slug root, (b) shares category+type with >=3 tag
+    overlap, or (c) is on the same topic (>=2 shared tags) but >=90 days apart.
+    """
+    for i in range(len(cluster)):
+        for j in range(i + 1, len(cluster)):
+            a, b = notes[cluster[i]], notes[cluster[j]]
+            if _slug_root(cluster[i]) == _slug_root(cluster[j]):
+                return True
+            shared_tags = len(set(a.get("tags", [])) & set(b.get("tags", [])))
+            same_cat = a.get("category", "") and a.get("category", "") == b.get("category", "")
+            same_type = a.get("type", "") and a.get("type", "") == b.get("type", "")
+            if same_cat and same_type and shared_tags >= 3:
+                return True
+            if shared_tags >= 2:
+                gap = _days_between(a.get("updated", ""), b.get("updated", ""))
+                if gap is not None and gap >= 90:
+                    return True
+    return False
+
+
+def _print_cluster(
+    idx: int, cluster: list[str], notes: dict, max_score: int, conflict: bool
+) -> None:
+    """Render one cluster block for interactive review."""
+    marker = "  \u26a0 possible conflict" if conflict else ""
+    typer.echo("\u2500" * 60)
+    typer.echo(f"Cluster {idx}  [score: {max_score}]{marker}")
+    typer.echo("\u2500" * 60)
+    for label, nid in zip(_cluster_labels(len(cluster)), cluster, strict=False):
+        n = notes[nid]
+        tags = ", ".join(n.get("tags", []))
+        snippet = n.get("content", "")[:100].replace("\n", " ").strip()
+        typer.echo(f"  [{label}] {nid}")
+        typer.echo(
+            f"      type: {n.get('type', '?')}  tier: {n.get('tier', '?')}  "
+            f"updated: {n.get('updated', '?')}"
+        )
+        if tags:
+            typer.echo(f"      tags: {tags}")
+        if snippet:
+            typer.echo(f'      "{snippet}..."')
+    typer.echo("")
+
+
+def _cluster_labels(n: int) -> list[str]:
+    """Letter labels A, B, C, ... for cluster members."""
+    return [chr(ord("A") + i) for i in range(n)]
+
+
+def _merge_cluster(
+    vault_path: Path,
+    cluster: list[str],
+    notes: dict,
+) -> tuple[str, list[str]]:
+    """Merge every note in the cluster into one. Returns (merged_id, deleted_ids).
+
+    - Body: each source body concatenated with a '---' separator and a provenance line.
+    - Tier: the highest-priority tier present (core > project > skill:* > vault-only).
+    - Tags: union of all source tags. Category: prompted if sources disagree.
+    - Type: the most common type among sources (ties broken by first occurrence).
+    """
+    typer.echo("\nMerging: " + ", ".join(cluster))
+    default_title = notes[cluster[0]].get("aliases", [cluster[0]])[0]
+    title = typer.prompt("  Title for merged note", default=default_title)
+
+    tier_rank = {"core": 3, "project": 2, "vault-only": 0}
+
+    def tier_priority(t: str) -> int:
+        if t.startswith("skill:"):
+            return 1
+        return tier_rank.get(t, 0)
+
+    tiers = [notes[nid].get("tier", "vault-only") for nid in cluster]
+    merged_tier = max(tiers, key=tier_priority)
+
+    types = [notes[nid].get("type", "knowledge") for nid in cluster]
+    merged_type = max(set(types), key=lambda t: (types.count(t), -types.index(t)))
+
+    tag_union: list[str] = []
+    for nid in cluster:
+        for t in notes[nid].get("tags", []):
+            if t not in tag_union:
+                tag_union.append(t)
+
+    categories = {
+        notes[nid].get("category", "") for nid in cluster if notes[nid].get("category", "")
+    }
+    if len(categories) <= 1:
+        merged_category = next(iter(categories), None)
+    else:
+        merged_category = typer.prompt(
+            f"  Sources have differing categories ({', '.join(sorted(categories))}). Category",
+            default=sorted(categories)[0],
+        )
+
+    body_parts: list[str] = []
+    for nid in cluster:
+        body_parts.append(f"<!-- merged from {nid} -->\n{notes[nid].get('content', '').strip()}")
+    merged_body = "\n\n---\n\n".join(body_parts)
+
+    merged_id = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-") or "merged-note"
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    note_path, exists = _resolve_note_path(vault_path, merged_id, merged_type, merged_category)
+    content = _build_note_content(
+        merged_id, merged_type, merged_tier, title, today, merged_category, tag_union, merged_body
+    )
+    note_path.parent.mkdir(parents=True, exist_ok=True)
+    note_path.write_text(content, encoding="utf-8")
+    _update_memory_json_inline(
+        vault_root=vault_path,
+        note_id=merged_id,
+        note_type=merged_type,
+        tier=merged_tier,
+        category=merged_category,
+        aliases=[title],
+        tags=tag_union,
+        body=merged_body,
+        updated=today,
+    )
+    typer.echo(f"  Created merged note: {note_path}")
+
+    # Delete the originals (except when a source shares the merged id — the merge
+    # already overwrote it in place).
+    deleted: list[str] = []
+    for nid in cluster:
+        if nid == merged_id:
+            continue
+        src = _scan_vault_for_note(vault_path, nid)
+        if src is not None:
+            src.unlink()
+            _remove_from_memory_json_inline(vault_root=vault_path, note_id=nid)
+            deleted.append(nid)
+            typer.echo(f"  Deleted original: {nid}")
+    return merged_id, deleted
+
+
+def _delete_note(vault_path: Path, note_id: str) -> bool:
+    """Delete a single note by id. Returns True if removed."""
+    src = _scan_vault_for_note(vault_path, note_id)
+    if src is None:
+        typer.echo(f"  (skip) {note_id} not found on disk")
+        return False
+    src.unlink()
+    _remove_from_memory_json_inline(vault_root=vault_path, note_id=note_id)
+    typer.echo(f"  Deleted: {note_id}")
+    return True
+
+
+@memory_app.command()
+def compact(
+    threshold: int = typer.Option(
+        5, "--threshold", "-t", help="Minimum similarity score to form a cluster"
+    ),
+    limit: int = typer.Option(20, "--limit", "-n", help="Max clusters to present"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show clusters, make no changes"),
+    include_vault_only: bool = typer.Option(
+        False, "--include-vault-only", help="Also sweep vault-only and drained notes"
+    ),
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="Non-interactive: report clusters, skip all (no writes)"
+    ),
+    vault: str | None = typer.Option(None, "--vault", help="Vault path (auto-detect by default)"),
+) -> None:
+    """Analyze the vault for overlapping or contradictory notes and resolve them.
+
+    Clusters notes by similarity (wiki-links, shared tags, category/type, content
+    overlap), flags likely contradictions, and lets you merge, delete, or keep each
+    cluster. Runs 'cortex encode' at the end unless nothing changed or --dry-run.
+    """
+    vault_path = _find_vault_path(vault)
+    if not vault_path or not vault_path.exists():
+        _error(
+            "Vault not found",
+            "A vault directory is required to compact notes.",
+            "Run 'cortex install' first, or pass --vault to specify the vault path.",
+        )
+        raise typer.Exit(code=1)
+
+    data, _mem_path = _load_memory_json(vault)
+    notes: dict = dict(data.get("notes", {}))
+
+    if include_vault_only:
+        # memory.json omits vault-only and drained notes; sweep the raw vault to
+        # include them in the analysis.
+        from cortex.encoder.core import scan_vault
+        from cortex.vault.links import strip_wiki_links
+
+        for vn in scan_vault(vault_path):
+            if vn.name in notes:
+                continue
+            notes[vn.name] = {
+                "id": vn.name,
+                "type": vn.note_type,
+                "category": vn.category,
+                "tier": vn.tier,
+                "tags": vn.tags,
+                "updated": vn.updated,
+                "aliases": vn.aliases,
+                "content": strip_wiki_links(vn.body),
+            }
+
+    if len(notes) < 2:
+        typer.echo("Fewer than 2 notes available — nothing to compact.")
+        return
+
+    adjacency: dict[str, list[str]] = data.get("_graph", {}).get("adjacency", {})
+
+    # Phase: score every unique pair.
+    ids = list(notes.keys())
+    pair_scores: dict[tuple[str, str], int] = {}
+    for i in range(len(ids)):
+        for j in range(i + 1, len(ids)):
+            a_id, b_id = ids[i], ids[j]
+            score = _pair_score(a_id, notes[a_id], b_id, notes[b_id], adjacency)
+            if score >= threshold:
+                pair_scores[(a_id, b_id)] = score
+
+    clusters = _cluster_notes(ids, pair_scores, threshold)
+    if not clusters:
+        typer.echo(
+            f"No overlapping clusters found at threshold {threshold}. Vault looks tidy."
+        )
+        return
+
+    def cluster_max_score(cluster: list[str]) -> int:
+        best = 0
+        for i in range(len(cluster)):
+            for j in range(i + 1, len(cluster)):
+                key = (cluster[i], cluster[j])
+                rev = (cluster[j], cluster[i])
+                best = max(best, pair_scores.get(key, pair_scores.get(rev, 0)))
+        return best
+
+    clusters.sort(key=cluster_max_score, reverse=True)
+    clusters = clusters[:limit]
+
+    typer.echo(
+        f"Found {len(clusters)} cluster(s) of related notes "
+        f"(threshold {threshold}).\n"
+    )
+
+    merged_count = 0
+    deleted_count = 0
+    skipped_count = 0
+    changed = False
+
+    for idx, cluster in enumerate(clusters, start=1):
+        conflict = _flag_conflict(cluster, notes)
+        _print_cluster(idx, cluster, notes, cluster_max_score(cluster), conflict)
+
+        if dry_run or yes:
+            skipped_count += 1
+            continue
+
+        labels = _cluster_labels(len(cluster))
+        label_map = dict(zip(labels, cluster, strict=False))
+        del_opts = " ".join(f"(d{lbl}) delete {lbl}" for lbl in labels)
+        typer.echo(
+            f"  (m) merge all    (k) keep all/skip    {del_opts}\n"
+            f"  (s) show full content    (q) quit"
+        )
+
+        while True:
+            choice = typer.prompt("  >").strip().lower()
+            if choice == "q":
+                typer.echo("\nQuitting compaction.")
+                _finish_compact(
+                    vault_path, changed, dry_run, merged_count, deleted_count, skipped_count
+                )
+                return
+            if choice == "k":
+                skipped_count += 1
+                break
+            if choice == "s":
+                for lbl, nid in label_map.items():
+                    typer.echo(f"\n  ===== [{lbl}] {nid} =====")
+                    typer.echo(notes[nid].get("content", "(empty)"))
+                typer.echo("")
+                continue
+            if choice == "m":
+                _merged_id, deleted = _merge_cluster(vault_path, cluster, notes)
+                merged_count += 1
+                deleted_count += len(deleted)
+                changed = True
+                break
+            if choice.startswith("d") and len(choice) == 2 and choice[1].upper() in label_map:
+                nid = label_map[choice[1].upper()]
+                if _delete_note(vault_path, nid):
+                    deleted_count += 1
+                    changed = True
+                break
+            typer.echo("  Unrecognized option. Choose m / k / d<letter> / s / q.")
+
+    _finish_compact(vault_path, changed, dry_run, merged_count, deleted_count, skipped_count)
+
+
+def _finish_compact(
+    vault_path: Path,
+    changed: bool,
+    dry_run: bool,
+    merged: int,
+    deleted: int,
+    skipped: int,
+) -> None:
+    """Print the compaction summary and run a full encode if anything changed."""
+    typer.echo(
+        f"\nCompact complete: {merged} merged, {deleted} deleted, {skipped} skipped."
+    )
+    if dry_run:
+        typer.echo("(dry run — no changes written)")
+        return
+    if not changed:
+        return
+    config_path = vault_path / "_sync" / "cortex.yaml"
+    if not config_path.exists():
+        typer.echo(
+            "Note: cortex.yaml not found; skipping encode. "
+            "Run 'cortex encode' manually to regenerate distilled outputs."
+        )
+        return
+    typer.echo("Running cortex encode...")
+    run_encode(config_path=config_path)
+
+
 def _read_body(body: str | None, body_file: str | None) -> str:
     """Read body content from inline text or file."""
     if body is not None:
