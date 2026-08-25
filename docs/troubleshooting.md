@@ -1,5 +1,38 @@
 # Troubleshooting
 
+## Start here: `cortex doctor`
+
+Before chasing a specific error, run the built-in diagnostic. `cortex doctor`
+checks your whole installation — core assets *and* every agent platform — in one
+pass, and prints a suggested fix beside anything it finds wrong:
+
+```bash
+cortex doctor                      # check everything
+cortex doctor --platform opencode  # check one platform only
+cortex doctor --vault ~/cortex-ai  # explicit vault
+```
+
+**What it checks:**
+
+| Section | Checks |
+|---------|--------|
+| Core | Python ≥ 3.10 · `cortex.yaml` present · vault exists and is writable · schema compatibility · encoded `memory.json` present, valid, and fresh (≤ 7 days) · skill installed |
+| Per platform | Whether the platform is detected, and whether its integration validates (opencode, codex, copilot) |
+
+**Reading the symbols:**
+
+- `✓` healthy · `⚠` works but needs attention (e.g. stale memory, migration
+  pending) · `✗` broken · `○` skipped because a prerequisite failed.
+
+The run ends with `Status: HEALTHY` or `Status: NEEDS ATTENTION`. If anything is
+wrong, most issues clear with `cortex install` (assets) or `cortex encode`
+(stale/missing memory) — doctor names the exact command per line.
+
+> `cortex doctor` is the cross-platform superset of `cortex status`. Use `status`
+> for a quick single-environment glance; use `doctor` when something is actually
+> broken or you want per-platform validation. For version/schema health
+> specifically, `cortex encode --check` is the narrowest check.
+
 ## Installation
 
 ### "python3 not found on PATH"

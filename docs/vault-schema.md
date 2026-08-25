@@ -286,12 +286,47 @@ Notes are excluded from encoding if:
 
 ## Wiki Links
 
-By default, the encoder strips Obsidian wiki links:
+Notes can reference each other with Obsidian-style `[[wiki-links]]`. Cortex does
+two independent things with them: **strips** them from encoded output, and
+**resolves** them into a note-to-note graph.
 
-- `[[foo|bar]]` → `bar`
-- `[[page-title]]` → `page-title`
+### Stripping (encoded output)
 
-Disable with `strip_wiki_links: false` in cortex.yaml.
+By default, the encoder strips wiki links from the body it hands to agents, so
+the distilled text reads cleanly:
+
+- `[[foo|bar]]` → `bar` (labelled link keeps the label)
+- `[[page-title]]` → `page-title` (bare link keeps the target text)
+
+Disable with `strip_wiki_links: false` in cortex.yaml. Stripping only affects the
+*output* — the raw note on disk is never modified, so resolution (below) still
+sees the original links.
+
+### Resolution (the link graph)
+
+Separately, Cortex parses every `[[link]]` and resolves each target to a real
+note, building a directed graph of which notes point to which. A target resolves
+in this order:
+
+1. **Exact id** — `[[jira-workflow-patterns]]` matches the note whose `id` is
+   `jira-workflow-patterns`.
+2. **Alias** — matched case-insensitively against every note's `aliases`.
+3. **Case-insensitive id** — a final fallback so `[[Sprint-Calendar]]` still
+   finds `sprint-calendar`.
+
+Self-links and duplicate links from the same note are collapsed. A target that
+matches none of the above is recorded as **dangling**.
+
+View the resolved graph without encoding:
+
+```
+cortex encode --graph
+```
+
+Dangling links are also surfaced by `cortex lint` as the `dangling-wiki-link`
+warning (see [Lint & Validation](#lint--validation) below), so a link that points
+at a note you renamed or deleted shows up as a fixable issue rather than silently
+breaking the graph.
 
 ## Best Practices
 
