@@ -140,7 +140,10 @@ def backup_file(src: Path, backup_dir: Path, dry: bool, actions: list | None = N
             actions.append({"op": "backup", "path": str(src), "saved_as": dst.name})
         return
     backup_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(src, dst)
+    if src.is_dir():
+        shutil.copytree(src, dst, dirs_exist_ok=True)
+    else:
+        shutil.copy2(src, dst)
     print(f"  backed up {src} -> {dst}")
     if actions is not None:
         actions.append({"op": "backup", "path": str(src), "saved_as": dst.name})

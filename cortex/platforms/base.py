@@ -121,7 +121,10 @@ class InstallerBase(ABC):
 
         flat = str(path).replace(str(Path.home()), "~").replace("/", "_").lstrip("_")
         backup_path = backup_dir / f"{flat}.bak"
-        shutil.copy2(path, backup_path)
+        if path.is_dir():
+            shutil.copytree(path, backup_path, dirs_exist_ok=True)
+        else:
+            shutil.copy2(path, backup_path)
         return backup_path
 
     def _write_file(self, path: Path, content: str, context: InstallContext) -> bool:

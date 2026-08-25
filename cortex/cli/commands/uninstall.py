@@ -68,7 +68,10 @@ def restore_from(manifest_path: Path, action: dict, apply: bool) -> None:
         print(f"  [DRY] restore {original}  <-  {saved.name}")
         return
     original.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(saved, original)
+    if saved.is_dir():
+        shutil.copytree(saved, original, dirs_exist_ok=True)
+    else:
+        shutil.copy2(saved, original)
     print(f"  restored {original}")
 
 
