@@ -165,14 +165,17 @@ def _find_vault() -> Path:
 
 
 def _backup_file(src: Path, backup_dir: Path) -> Path | None:
-    """Snapshot a file into backup_dir. Returns the backup path, or None if
-    the source didn't exist."""
+    """Snapshot a file or directory into backup_dir. Returns the backup path,
+    or None if the source didn't exist."""
     if not src.exists():
         return None
     flat = str(src).replace(str(Path.home()), "~").replace("/", "_").lstrip("_")
     dst = backup_dir / flat
     dst.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(src, dst)
+    if src.is_dir():
+        shutil.copytree(src, dst, dirs_exist_ok=True)
+    else:
+        shutil.copy2(src, dst)
     return dst
 
 
