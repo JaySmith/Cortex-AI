@@ -92,14 +92,30 @@ cortex uninstall --vault <vault> --latest --apply  # revert
 
 ## [Unreleased]
 
+## [2.0.1] — 2026-08-25
+
+### Fixed
+- `cortex lint --vault PATH` no longer requires `_sync/cortex.yaml`. An explicit
+  `--vault` is now trusted if it is a real directory, so lint works on a fresh or
+  example vault (the `cortex.yaml` gate is kept only for auto-detection). Fixes a
+  long-standing `test_lint_clean_vault` failure.
+- `cortex upgrade` no longer prints the false "automated migration is not
+  supported" warning on the schema-changed path. It now states accurately that
+  migration runs during the re-encode step (which backs up `_sync/` first).
+- `test_skips_underscore_dirs` failed on a fresh checkout because
+  `example-vault/` now ships a `_sync/` dir; the test's `mkdir` now passes
+  `exist_ok=True`.
+
 ### Added
 - `requirements-dev.txt` declaring `pytest` (previously undeclared — had to be
   installed by hand to run the suite). See `docs/DEVELOPMENT.md` → Running the tests.
 
-### Fixed
-- `test_skips_underscore_dirs` failed on a fresh checkout because
-  `example-vault/` now ships a `_sync/` dir; the test's `mkdir` now passes
-  `exist_ok=True`.
+### Documentation
+- Documented `cortex doctor` in the troubleshooting guide (core + per-platform
+  checks, symbol legend, and how it differs from `status` / `encode --check`).
+- Expanded the vault-schema wiki-links section to cover link **resolution** (id →
+  alias → case-insensitive fallback, dangling detection, `--graph`, the
+  `dangling-wiki-link` lint rule), not just stripping.
 
 ## [2.0.0] — 2026-07-20
 
