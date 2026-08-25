@@ -104,6 +104,43 @@ class TestUpgradeApply:
         assert result.exit_code == 0
         assert "unchanged" in result.output.lower()
 
+    def test_schema_changed_message_is_accurate(self, tmp_path: Path) -> None:
+        """When the vault schema differs from the code schema, the message must
+        state that migration runs during re-encode — not the old, false
+        "automated migration is not supported" warning.
+
+        read_vault_schema reads _sync/encoded/memory.json (_meta.schema_version),
+        so we stamp an older schema there to force the change-detected branch.
+        """
+        vault = tmp_path / "vault"
+        vault.mkdir()
+        sync = vault / "_sync"
+        sync.mkdir()
+        (sync / "cortex.yaml").write_text(
+            f'vault_path: "{vault}"\n'
+            f"targets:\n"
+            f"  core_context:\n"
+            f"    enabled: false\n"
+            f"  skills:\n"
+            f"    enabled: false\n"
+            f"  projects:\n"
+            f"    enabled: false\n"
+            f"  python-agents:\n"
+            f"    enabled: false\n"
+        )
+        # Stamp an old schema so live != code triggers the change-detected branch.
+        encoded = sync / "encoded"
+        encoded.mkdir()
+        (encoded / "memory.json").write_text('{"_meta": {"schema_version": 1}, "notes": {}}')
+
+        result = runner.invoke(app, ["upgrade", "--vault", str(vault)])
+        assert result.exit_code == 0
+        assert "change detected" in result.output.lower()
+        # Corrected messaging present...
+        assert "migration will run automatically during re-encode" in result.output.lower()
+        # ...and the old, misleading claim is gone.
+        assert "not supported" not in result.output.lower()
+
     def test_apply_backs_up_nested_encoded_dirs(self, tmp_path: Path) -> None:
         """Regression: upgrade backup must handle subdirectories under
         _sync/encoded (e.g. encoded/projects/), not just top-level files.

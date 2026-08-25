@@ -2090,7 +2090,16 @@ def upgrade(
         typer.echo("  Schema: unknown (fresh vault)")
     elif schema_changed:
         typer.echo(f"  Schema: {live_schema} -> {code_schema} (change detected)")
-        typer.echo("  Warning: automated migration is not supported. See docs/migration.md.")
+        if not apply:
+            typer.echo(
+                "  Migration will run automatically during re-encode "
+                "(a _sync/ backup is taken first). See docs/migration.md."
+            )
+        else:
+            typer.echo(
+                "  Migrating during re-encode (a _sync/ backup is taken first). "
+                "See docs/migration.md."
+            )
     else:
         typer.echo(f"  Schema: {code_schema} (unchanged)")
 
