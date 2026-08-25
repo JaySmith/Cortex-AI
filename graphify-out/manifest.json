@@ -1,0 +1,422 @@
+{
+  ".markdownlint.json": {
+    "mtime": 1787676598.5850258,
+    "ast_hash": "dbed0826b55458e60990d724755fcfbb",
+    "semantic_hash": "dbed0826b55458e60990d724755fcfbb"
+  },
+  "_sync/last-sync.json": {
+    "mtime": 1787676598.5861096,
+    "ast_hash": "3a60bc1b6b00f8bd4d6b405dd8ce5394",
+    "semantic_hash": "3a60bc1b6b00f8bd4d6b405dd8ce5394"
+  },
+  "cortex/__init__.py": {
+    "mtime": 1787676598.5868318,
+    "ast_hash": "ab91836b7ee293d6ca2d5de4c35c6f4f",
+    "semantic_hash": "ab91836b7ee293d6ca2d5de4c35c6f4f"
+  },
+  "cortex/cli/__init__.py": {
+    "mtime": 1787676598.5869446,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "cortex/cli/commands/__init__.py": {
+    "mtime": 1787676598.587082,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "cortex/cli/commands/import_agent.py": {
+    "mtime": 1787677287.2373524,
+    "ast_hash": "c05990f61a5028c367e6748c2f58360d",
+    "semantic_hash": "c05990f61a5028c367e6748c2f58360d"
+  },
+  "cortex/cli/commands/uninstall.py": {
+    "mtime": 1787677291.3508642,
+    "ast_hash": "9ff87219531b3c2715e1bedf876872ec",
+    "semantic_hash": "9ff87219531b3c2715e1bedf876872ec"
+  },
+  "cortex/cli/lint.py": {
+    "mtime": 1787676598.5876238,
+    "ast_hash": "bed9aff048558a5b5bc4f998e5a16e25",
+    "semantic_hash": "bed9aff048558a5b5bc4f998e5a16e25"
+  },
+  "cortex/cli/main.py": {
+    "mtime": 1787677165.6140382,
+    "ast_hash": "5cfcb0bcbe713a7efc83594d18af4e40",
+    "semantic_hash": "5cfcb0bcbe713a7efc83594d18af4e40"
+  },
+  "cortex/config/__init__.py": {
+    "mtime": 1787676598.5881195,
+    "ast_hash": "8f5d23d588a99f48c3690fdf8fd66333",
+    "semantic_hash": "8f5d23d588a99f48c3690fdf8fd66333"
+  },
+  "cortex/config/loader.py": {
+    "mtime": 1787676598.5882387,
+    "ast_hash": "429f3f17c14921ed7ffb4eaffb565713",
+    "semantic_hash": "429f3f17c14921ed7ffb4eaffb565713"
+  },
+  "cortex/encoder/__init__.py": {
+    "mtime": 1787676598.5883594,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "cortex/encoder/core.py": {
+    "mtime": 1787676598.5886645,
+    "ast_hash": "d2120a774c6bad13d8620f9a568ff8ca",
+    "semantic_hash": "d2120a774c6bad13d8620f9a568ff8ca"
+  },
+  "cortex/hub/__init__.py": {
+    "mtime": 1787676598.5888107,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "cortex/hub/client.py": {
+    "mtime": 1787676598.5890038,
+    "ast_hash": "3076d0c4f7b34b5ec42c7b05354bffb4",
+    "semantic_hash": "3076d0c4f7b34b5ec42c7b05354bffb4"
+  },
+  "cortex/memory/__init__.py": {
+    "mtime": 1787676598.5891917,
+    "ast_hash": "6961666add2093043fe48378316131ad",
+    "semantic_hash": "6961666add2093043fe48378316131ad"
+  },
+  "cortex/platforms/__init__.py": {
+    "mtime": 1787676598.5893564,
+    "ast_hash": "17a4d8446e64f8898089c8365d2998f6",
+    "semantic_hash": "17a4d8446e64f8898089c8365d2998f6"
+  },
+  "cortex/platforms/base.py": {
+    "mtime": 1787677283.1250513,
+    "ast_hash": "d6c366c783e26cf2b7b4225b6680a1b1",
+    "semantic_hash": "d6c366c783e26cf2b7b4225b6680a1b1"
+  },
+  "cortex/platforms/codex.py": {
+    "mtime": 1787676598.5896158,
+    "ast_hash": "57f6a67455f2737c4b9a26f217fc9327",
+    "semantic_hash": "57f6a67455f2737c4b9a26f217fc9327"
+  },
+  "cortex/platforms/copilot.py": {
+    "mtime": 1787676598.5897202,
+    "ast_hash": "d483003260b47095166b4168ce726877",
+    "semantic_hash": "d483003260b47095166b4168ce726877"
+  },
+  "cortex/platforms/opencode.py": {
+    "mtime": 1787676598.5898695,
+    "ast_hash": "217d7d40bfab0fed07af1da569686b9e",
+    "semantic_hash": "217d7d40bfab0fed07af1da569686b9e"
+  },
+  "cortex/platforms/registry.py": {
+    "mtime": 1787676598.589967,
+    "ast_hash": "9c9309086db99fdd2ee9bc58213ffdca",
+    "semantic_hash": "9c9309086db99fdd2ee9bc58213ffdca"
+  },
+  "cortex/templates/__init__.py": {
+    "mtime": 1787676598.5901098,
+    "ast_hash": "8adf21607a4a794255e38e6224fc4d85",
+    "semantic_hash": "8adf21607a4a794255e38e6224fc4d85"
+  },
+  "cortex/templates/_render.py": {
+    "mtime": 1787676598.5902126,
+    "ast_hash": "11fbc5c3ade306291050a7ce02fa9c78",
+    "semantic_hash": "11fbc5c3ade306291050a7ce02fa9c78"
+  },
+  "cortex/templates/engineering.py": {
+    "mtime": 1787676598.5903285,
+    "ast_hash": "9ab57830a3c59f1f9b46c756f96d95ba",
+    "semantic_hash": "9ab57830a3c59f1f9b46c756f96d95ba"
+  },
+  "cortex/templates/knowledge_base.py": {
+    "mtime": 1787676598.5904272,
+    "ast_hash": "fe06b16ef129150fd32e27fa7ee6af73",
+    "semantic_hash": "fe06b16ef129150fd32e27fa7ee6af73"
+  },
+  "cortex/templates/personal.py": {
+    "mtime": 1787676598.590528,
+    "ast_hash": "134881d476c88eb538153fe7b3abb0a3",
+    "semantic_hash": "134881d476c88eb538153fe7b3abb0a3"
+  },
+  "cortex/templates/product_management.py": {
+    "mtime": 1787676598.5906353,
+    "ast_hash": "fae5bfa500285be2c06a0ee4a4ccac61",
+    "semantic_hash": "fae5bfa500285be2c06a0ee4a4ccac61"
+  },
+  "cortex/vault/__init__.py": {
+    "mtime": 1787676598.590787,
+    "ast_hash": "b17f00d1ea97db61b676e3e485aa1b66",
+    "semantic_hash": "b17f00d1ea97db61b676e3e485aa1b66"
+  },
+  "cortex/vault/links.py": {
+    "mtime": 1787676598.590891,
+    "ast_hash": "128bc8cd37eef2563b6ea233ea928f94",
+    "semantic_hash": "128bc8cd37eef2563b6ea233ea928f94"
+  },
+  "pyproject.toml": {
+    "mtime": 1787676598.595447,
+    "ast_hash": "aa5ab7a792c607d24d794073b53cb6c2",
+    "semantic_hash": "aa5ab7a792c607d24d794073b53cb6c2"
+  },
+  "pyrightconfig.json": {
+    "mtime": 1787676598.5955572,
+    "ast_hash": "6d7e0c124a87fdf85f12902c446d8a48",
+    "semantic_hash": "6d7e0c124a87fdf85f12902c446d8a48"
+  },
+  "tests/__init__.py": {
+    "mtime": 1787676598.5969245,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "tests/conftest.py": {
+    "mtime": 1787676598.5970473,
+    "ast_hash": "429ba0378d53d5dc4e880cf955ae723d",
+    "semantic_hash": "429ba0378d53d5dc4e880cf955ae723d"
+  },
+  "tests/test_cortex_import.py": {
+    "mtime": 1787676598.597187,
+    "ast_hash": "ea4889237d86f93e38d38b5c63f2860c",
+    "semantic_hash": "ea4889237d86f93e38d38b5c63f2860c"
+  },
+  "tests/test_doctor.py": {
+    "mtime": 1787676598.5972917,
+    "ast_hash": "5de138413a8d06d0190c92a4fb850741",
+    "semantic_hash": "5de138413a8d06d0190c92a4fb850741"
+  },
+  "tests/test_doctor_diagnostics.py": {
+    "mtime": 1787676598.59739,
+    "ast_hash": "ae4c06b443e88dfc21b2268ee70db7d4",
+    "semantic_hash": "ae4c06b443e88dfc21b2268ee70db7d4"
+  },
+  "tests/test_encode.py": {
+    "mtime": 1787676598.5975204,
+    "ast_hash": "3eba6792662c2a04fd91d44a41e164d9",
+    "semantic_hash": "3eba6792662c2a04fd91d44a41e164d9"
+  },
+  "tests/test_error_messages.py": {
+    "mtime": 1787676598.5976338,
+    "ast_hash": "e0a77f7710db7a702b2bec8fa2cadd27",
+    "semantic_hash": "e0a77f7710db7a702b2bec8fa2cadd27"
+  },
+  "tests/test_hive_client.py": {
+    "mtime": 1787676598.5977852,
+    "ast_hash": "b1e2bccca85662be011deaedda925589",
+    "semantic_hash": "b1e2bccca85662be011deaedda925589"
+  },
+  "tests/test_init_templates.py": {
+    "mtime": 1787676598.5978968,
+    "ast_hash": "f550f27c19891f83bebd7ea6665b2adc",
+    "semantic_hash": "f550f27c19891f83bebd7ea6665b2adc"
+  },
+  "tests/test_lint.py": {
+    "mtime": 1787676598.5980365,
+    "ast_hash": "24d9bd0b1ebd863f9b2f146446c742bd",
+    "semantic_hash": "24d9bd0b1ebd863f9b2f146446c742bd"
+  },
+  "tests/test_memory_cli.py": {
+    "mtime": 1787676772.991821,
+    "ast_hash": "96f68e6de119965283d64524b0385faa",
+    "semantic_hash": "96f68e6de119965283d64524b0385faa"
+  },
+  "tests/test_platform_installers.py": {
+    "mtime": 1787676598.598338,
+    "ast_hash": "b982bec50487294bc075274c627bc9cb",
+    "semantic_hash": "b982bec50487294bc075274c627bc9cb"
+  },
+  "tests/test_upgrade.py": {
+    "mtime": 1787677151.643822,
+    "ast_hash": "dd1b804a368ce4f5e4f9a2037ec61a4a",
+    "semantic_hash": "dd1b804a368ce4f5e4f9a2037ec61a4a"
+  },
+  ".github/workflows/ci.yml": {
+    "mtime": 1787676598.5847728,
+    "ast_hash": "d9ecd93fd0a50e62d511c9c9f8a10429",
+    "semantic_hash": "d9ecd93fd0a50e62d511c9c9f8a10429"
+  },
+  ".pre-commit-config.yaml": {
+    "mtime": 1787676598.5851333,
+    "ast_hash": "14850bb2f1e426cc02257a9694415144",
+    "semantic_hash": "14850bb2f1e426cc02257a9694415144"
+  },
+  "CHANGELOG.md": {
+    "mtime": 1787676598.5853868,
+    "ast_hash": "6428947fb2ac0e99f70c0b3c0493539e",
+    "semantic_hash": "6428947fb2ac0e99f70c0b3c0493539e"
+  },
+  "README.md": {
+    "mtime": 1787676598.5856948,
+    "ast_hash": "f12b64bd4c5e422f04e2b3dbbc3e8f14",
+    "semantic_hash": "f12b64bd4c5e422f04e2b3dbbc3e8f14"
+  },
+  "agents.md": {
+    "mtime": 1787676598.586244,
+    "ast_hash": "9a151ddae758ad4ec7189e63cc72c720",
+    "semantic_hash": "9a151ddae758ad4ec7189e63cc72c720"
+  },
+  "context.md": {
+    "mtime": 1787676598.5863688,
+    "ast_hash": "556ce67cfccb1af6237ede966d1a2e74",
+    "semantic_hash": "556ce67cfccb1af6237ede966d1a2e74"
+  },
+  "cortex/SKILL.md": {
+    "mtime": 1787676598.5867333,
+    "ast_hash": "4b97bd9d9ae69c70f65bd16af64d820d",
+    "semantic_hash": "4b97bd9d9ae69c70f65bd16af64d820d"
+  },
+  "docs/adr/0001-postgres-link-graph-for-hub-vault.md": {
+    "mtime": 1787676598.5911222,
+    "ast_hash": "cbc7da3de254028be77c092ca7ed61f9",
+    "semantic_hash": "cbc7da3de254028be77c092ca7ed61f9"
+  },
+  "docs/bugs/2026-07-20-cortex-import-wrong-vault.md": {
+    "mtime": 1787676598.5913458,
+    "ast_hash": "77295a5297440933bcc588bd55e1b29d",
+    "semantic_hash": "77295a5297440933bcc588bd55e1b29d"
+  },
+  "docs/bugs/2026-07-20-version-file-out-of-sync.md": {
+    "mtime": 1787676598.591455,
+    "ast_hash": "e15e4554e26b33c97efb506690381d23",
+    "semantic_hash": "e15e4554e26b33c97efb506690381d23"
+  },
+  "docs/cli-reference.md": {
+    "mtime": 1787676598.591617,
+    "ast_hash": "4ee27c67e09ae0342aa3e467d010d00f",
+    "semantic_hash": "4ee27c67e09ae0342aa3e467d010d00f"
+  },
+  "docs/development.md": {
+    "mtime": 1787676598.591786,
+    "ast_hash": "8f0148f5d4e5a1f9d226c6ae66073f10",
+    "semantic_hash": "8f0148f5d4e5a1f9d226c6ae66073f10"
+  },
+  "docs/extending.md": {
+    "mtime": 1787676598.5919402,
+    "ast_hash": "354cf4a5428586de6afdf6857212c065",
+    "semantic_hash": "354cf4a5428586de6afdf6857212c065"
+  },
+  "docs/hive-integration.md": {
+    "mtime": 1787676598.5920913,
+    "ast_hash": "6d1be5c5f5bd2c7d78fe8bf2afaa88c1",
+    "semantic_hash": "6d1be5c5f5bd2c7d78fe8bf2afaa88c1"
+  },
+  "docs/installation.md": {
+    "mtime": 1787676598.59223,
+    "ast_hash": "6df4e1a2f47cae8fbeeea90c4be1206e",
+    "semantic_hash": "6df4e1a2f47cae8fbeeea90c4be1206e"
+  },
+  "docs/memory-model.md": {
+    "mtime": 1787676598.5923944,
+    "ast_hash": "d3d5fe7e50604e0aa48812087e9d7556",
+    "semantic_hash": "d3d5fe7e50604e0aa48812087e9d7556"
+  },
+  "docs/migration.md": {
+    "mtime": 1787676598.592507,
+    "ast_hash": "604a87b365de64f1daf50345ba175d36",
+    "semantic_hash": "604a87b365de64f1daf50345ba175d36"
+  },
+  "docs/overview.md": {
+    "mtime": 1787676598.5928538,
+    "ast_hash": "01250e36509c4feb4a86019c7a6c4e29",
+    "semantic_hash": "01250e36509c4feb4a86019c7a6c4e29"
+  },
+  "docs/quickstart.md": {
+    "mtime": 1787676598.592967,
+    "ast_hash": "b5095f40b55647d3303e0739160d54ad",
+    "semantic_hash": "b5095f40b55647d3303e0739160d54ad"
+  },
+  "docs/troubleshooting.md": {
+    "mtime": 1787676598.5930722,
+    "ast_hash": "8563e6711a56b594446ff3d7396a54ee",
+    "semantic_hash": "8563e6711a56b594446ff3d7396a54ee"
+  },
+  "docs/vault-note-schema.md": {
+    "mtime": 1787676598.5933185,
+    "ast_hash": "5d7d0c56b08ab810c5074bb26ea98117",
+    "semantic_hash": "5d7d0c56b08ab810c5074bb26ea98117"
+  },
+  "docs/vault-schema.md": {
+    "mtime": 1787676598.5934641,
+    "ast_hash": "f824c4876a76c4c653d98dff657a4245",
+    "semantic_hash": "f824c4876a76c4c653d98dff657a4245"
+  },
+  "example-vault/README.md": {
+    "mtime": 1787676598.5936291,
+    "ast_hash": "73a1278ca497327e643039a5467450fc",
+    "semantic_hash": "73a1278ca497327e643039a5467450fc"
+  },
+  "example-vault/entities/projects/example-project.md": {
+    "mtime": 1787676598.593887,
+    "ast_hash": "97efe0b14ddff845679d5120c2df2939",
+    "semantic_hash": "97efe0b14ddff845679d5120c2df2939"
+  },
+  "example-vault/feedback/dev-preferences.md": {
+    "mtime": 1787676598.5940647,
+    "ast_hash": "818e667cc8581de9097c5099e20cbdd5",
+    "semantic_hash": "818e667cc8581de9097c5099e20cbdd5"
+  },
+  "example-vault/feedback/vault-capture-rules.md": {
+    "mtime": 1787676598.5942,
+    "ast_hash": "a42adf742a91d87fbcc5628b3ff66935",
+    "semantic_hash": "a42adf742a91d87fbcc5628b3ff66935"
+  },
+  "example-vault/knowledge/patterns/tiered-memory.md": {
+    "mtime": 1787676598.5944574,
+    "ast_hash": "b2c7831b89aec1bbbf0f29ec3f001117",
+    "semantic_hash": "b2c7831b89aec1bbbf0f29ec3f001117"
+  },
+  "example-vault/logs/2024-01-15-session.md": {
+    "mtime": 1787676598.5946198,
+    "ast_hash": "f098e33c0e8182566201df0d4edc206c",
+    "semantic_hash": "f098e33c0e8182566201df0d4edc206c"
+  },
+  "implementation-plans/cortex-phase-1-cli-installation.md": {
+    "mtime": 1787676598.5948632,
+    "ast_hash": "319bff6b1b8d55483fb1bb888bf6aedf",
+    "semantic_hash": "319bff6b1b8d55483fb1bb888bf6aedf"
+  },
+  "implementation-plans/cortex-phase-2-linting-ci.md": {
+    "mtime": 1787676598.595033,
+    "ast_hash": "b787e19fc4fae36b5ee3550d8049e87c",
+    "semantic_hash": "b787e19fc4fae36b5ee3550d8049e87c"
+  },
+  "implementation-plans/cortex-phase-3-multi-agent-support.md": {
+    "mtime": 1787676598.5951817,
+    "ast_hash": "4624458c1dd3d8e32598fff054e04972",
+    "semantic_hash": "4624458c1dd3d8e32598fff054e04972"
+  },
+  "implementation-plans/cortex-phase-4-product-polish.md": {
+    "mtime": 1787676598.5953348,
+    "ast_hash": "36e31ecf125b672ef3df4c78d4199e25",
+    "semantic_hash": "36e31ecf125b672ef3df4c78d4199e25"
+  },
+  "requirements-dev.txt": {
+    "mtime": 1787676598.5957797,
+    "ast_hash": "bbdfa48219bec987b89b209bdac6d5e8",
+    "semantic_hash": "bbdfa48219bec987b89b209bdac6d5e8"
+  },
+  "requirements.txt": {
+    "mtime": 1787676598.5958834,
+    "ast_hash": "0e4d2667e557b1b81b493cb7d78d8c3b",
+    "semantic_hash": "0e4d2667e557b1b81b493cb7d78d8c3b"
+  },
+  "roadmap.md": {
+    "mtime": 1787676598.5960383,
+    "ast_hash": "2d6b983e33e2334d801a70f13c3436b0",
+    "semantic_hash": "2d6b983e33e2334d801a70f13c3436b0"
+  },
+  "skills/auto-learn/SKILL.md": {
+    "mtime": 1787676598.5963557,
+    "ast_hash": "f48b102fd22817aedec7e8d9d49943f5",
+    "semantic_hash": "f48b102fd22817aedec7e8d9d49943f5"
+  },
+  "skills/auto-learn/reference.md": {
+    "mtime": 1787676598.5965085,
+    "ast_hash": "a0bb56279e04da36cfee2ff2165ab8bc",
+    "semantic_hash": "a0bb56279e04da36cfee2ff2165ab8bc"
+  },
+  "skills/cortex-ai/SKILL.md": {
+    "mtime": 1787676598.596709,
+    "ast_hash": "802a30067fb31addf67483f3a1bef707",
+    "semantic_hash": "802a30067fb31addf67483f3a1bef707"
+  },
+  "skills/template.md": {
+    "mtime": 1787676598.5968134,
+    "ast_hash": "0bd24a0d135cbced0b1a224a732b65fe",
+    "semantic_hash": "0bd24a0d135cbced0b1a224a732b65fe"
+  }
+}
