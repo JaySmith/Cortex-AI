@@ -8,7 +8,6 @@ from cortex.platforms.base import (
     InstallContext,
     InstallerBase,
     InstallResult,
-    upsert_managed_block,
 )
 
 # Where OpenCode looks for skills
@@ -42,34 +41,34 @@ class OpenCodeInstaller(InstallerBase):
         cortex_home = context.vault_root / "_sync"
         rendered = template.replace("<CORTEX_HOME>", str(cortex_home))
 
-        # Wrap in managed block markers for safe upgrades
-        managed_content = upsert_managed_block("", rendered)
+        # OpenCode requires SKILL.md to START with YAML frontmatter
+        # (https://opencode.ai/docs/skills), so the file is written raw — the
+        # whole file is Cortex-managed and replaced wholesale on upgrade. Do
+        # NOT wrap in a managed-block comment: a leading comment pushes the
+        # frontmatter off the first line and the skill fails to load.
+        existed = skill_file.exists()
 
-        # Backup existing skill file if present
-        if skill_file.exists():
+        if context.dry_run:
+            if not existed:
+                result.created.append(skill_file)
+            elif skill_file.read_text(encoding="utf-8") != rendered:
+                result.updated.append(skill_file)
+            return result
+
+        # Backup existing skill file before overwriting
+        if existed:
             backup = self._backup(skill_file, context)
             if backup:
                 result.backed_up.append(backup)
 
-        # Write — use upsert to preserve user content outside the managed block
-        if context.dry_run:
-            if not skill_file.exists():
-                result.created.append(skill_file)
-            else:
-                existing = skill_file.read_text(encoding="utf-8")
-                if existing != managed_content:
-                    result.updated.append(skill_file)
+        skill_dir.mkdir(parents=True, exist_ok=True)
+        if existed:
+            if skill_file.read_text(encoding="utf-8") != rendered:
+                skill_file.write_text(rendered, encoding="utf-8")
+                result.updated.append(skill_file)
         else:
-            skill_dir.mkdir(parents=True, exist_ok=True)
-            if skill_file.exists():
-                existing = skill_file.read_text(encoding="utf-8")
-                final = upsert_managed_block(existing, rendered)
-                if existing != final:
-                    skill_file.write_text(final, encoding="utf-8")
-                    result.updated.append(skill_file)
-            else:
-                skill_file.write_text(managed_content, encoding="utf-8")
-                result.created.append(skill_file)
+            skill_file.write_text(rendered, encoding="utf-8")
+            result.created.append(skill_file)
 
         return result
 
@@ -94,7 +93,14 @@ class OpenCodeInstaller(InstallerBase):
         return result
 
     def validate(self, context: InstallContext) -> list[str]:
-        """Check that the skill file exists and contains a managed block."""
+        """Check that the skill file exists and is a loadable OpenCode skill.
+
+        OpenCode requires SKILL.md to START with YAML frontmatter
+        (https://opencode.ai/docs/skills), so the file is written raw with no
+        managed-block wrapper. Validation therefore checks the real loading
+        contract: the file exists, starts with frontmatter, and has no
+        unresolved template placeholder.
+        """
         errors: list[str] = []
         skills_dir = context.skills_dir or OPENCODE_SKILLS_DIR
         skill_file = skills_dir / "cortex-ai" / "SKILL.md"
@@ -104,8 +110,12 @@ class OpenCodeInstaller(InstallerBase):
             return errors
 
         content = skill_file.read_text(encoding="utf-8")
-        if "BEGIN CORTEX MANAGED BLOCK" not in content:
-            errors.append(f"Skill file exists but is not managed by Cortex: {skill_file}")
+
+        # OpenCode requires frontmatter as the very first line.
+        if not content.lstrip("\ufeff").startswith("---"):
+            errors.append(
+                f"Skill file must start with YAML frontmatter (---): {skill_file}"
+            )
 
         # Check that <CORTEX_HOME> was resolved
         if "<CORTEX_HOME>" in content:

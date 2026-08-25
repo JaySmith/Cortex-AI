@@ -24,8 +24,9 @@ class TestDoctor:
         # Set up skill file in the expected location under monkeypatched home
         skills_dir = tmp_path / ".config" / "opencode" / "skills" / "cortex-ai"
         skills_dir.mkdir(parents=True)
+        # A loadable OpenCode skill must START with YAML frontmatter.
         (skills_dir / "SKILL.md").write_text(
-            "<!-- BEGIN CORTEX MANAGED BLOCK -->\nskill content\n<!-- END CORTEX MANAGED BLOCK -->"
+            "---\nname: cortex-ai\ndescription: test\n---\n\nskill content\n"
         )
 
         # Monkeypatch home and paths

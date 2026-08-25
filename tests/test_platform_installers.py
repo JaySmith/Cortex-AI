@@ -120,7 +120,10 @@ class TestOpenCodeInstaller:
         skill_file = install_ctx.skills_dir / "cortex-ai" / "SKILL.md"
         assert skill_file.exists()
         content = skill_file.read_text()
-        assert BEGIN_MARKER in content
+        # OpenCode requires SKILL.md to start with YAML frontmatter — the file
+        # must NOT be wrapped in a managed-block comment.
+        assert content.startswith("---")
+        assert BEGIN_MARKER not in content
         assert "<CORTEX_HOME>" not in content  # placeholder resolved
         assert len(result.created) == 1
 
@@ -167,26 +170,23 @@ class TestOpenCodeInstaller:
         assert len(errors) == 1
         assert "missing" in errors[0].lower()
 
-    def test_validate_unmanaged_file(self, install_ctx):
-        # Write a skill file without managed block markers
+    def test_validate_rejects_file_not_starting_with_frontmatter(self, install_ctx):
+        # A file that doesn't start with frontmatter can't load as an OpenCode
+        # skill — e.g. one wrapped in a leading managed-block comment.
         skill_dir = install_ctx.skills_dir / "cortex-ai"
         skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("unmanaged content")
+        (skill_dir / "SKILL.md").write_text(f"{BEGIN_MARKER}\n---\nname: x\n---\n")
         inst = OpenCodeInstaller()
         errors = inst.validate(install_ctx)
-        assert any("not managed" in e.lower() for e in errors)
+        assert any("frontmatter" in e.lower() for e in errors)
 
-    def test_install_preserves_user_content_outside_block(self, install_ctx):
+    def test_installed_skill_starts_with_frontmatter_after_reinstall(self, install_ctx):
         inst = OpenCodeInstaller()
-        # First install
         inst.install(install_ctx)
+        # Reinstall (upgrade path) must keep frontmatter on the first line.
+        result = inst.install(install_ctx)
         skill_file = install_ctx.skills_dir / "cortex-ai" / "SKILL.md"
-        # Add user content outside the managed block
-        existing = skill_file.read_text()
-        skill_file.write_text(f"# My custom header\n\n{existing}\n\n# My footer")
-        # Re-install
-        inst.install(install_ctx)
         content = skill_file.read_text()
-        assert "# My custom header" in content
-        assert "# My footer" in content
-        assert BEGIN_MARKER in content
+        assert content.startswith("---")
+        assert BEGIN_MARKER not in content
+        assert not result.changed  # idempotent, no spurious rewrite

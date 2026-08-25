@@ -92,6 +92,28 @@ cortex uninstall --vault <vault> --latest --apply  # revert
 
 ## [Unreleased]
 
+## [2.0.2] — 2026-08-25
+
+### Fixed
+- OpenCode skill install no longer wraps `SKILL.md` in a managed-block HTML
+  comment. OpenCode requires the file to **start** with YAML frontmatter
+  (https://opencode.ai/docs/skills); the leading `<!-- BEGIN CORTEX MANAGED
+  BLOCK -->` pushed `---` off the first line, which could stop the skill
+  loading. The file is now written raw (whole file is Cortex-managed, replaced
+  wholesale on upgrade).
+- `cortex doctor` no longer reports a permanent "Skill file exists but is not
+  managed by Cortex" error for OpenCode. `OpenCodeInstaller.validate()` now
+  checks the real loading contract — file exists, starts with frontmatter, and
+  has no unresolved `<CORTEX_HOME>` placeholder — instead of requiring the
+  managed-block marker that `cortex install` never wrote. The `install` and
+  `doctor` code paths now agree.
+
+### Known issues
+- `cortex opencode install` (the per-platform registry path) still resolves the
+  skill template relative to the installed package and fails when run from the
+  installed tool; the top-level `cortex install` is the working path. Unifying
+  the two skill-install implementations is tracked separately.
+
 ## [2.0.1] — 2026-08-25
 
 ### Fixed
