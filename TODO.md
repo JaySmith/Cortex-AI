@@ -23,7 +23,7 @@ when issues are opened or closed.
   `CopilotInstaller.install()` is a no-op stub (`cortex/platforms/copilot.py:26`).
 
 - [ ] **OpenCode install: also write the cortex-first rule + cortex tools** —
-  [#5](https://github.com/JaySmith/cortex-ai/issues/5). `OpenCodeInstaller`
+  [#7](https://github.com/JaySmith/cortex-ai/issues/7). `OpenCodeInstaller`
   currently only writes `~/.config/opencode/skills/cortex-ai/SKILL.md`. It
   should additionally install `opencode/AGENTS.md` (cortex-first lookup rule)
   to `~/.config/opencode/AGENTS.md` and the `cortex_search`/`cortex_get` custom
