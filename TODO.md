@@ -21,4 +21,12 @@ when issues are opened or closed.
 - [ ] **Wave 2: GitHub Copilot platform asset generation** —
   [#4](https://github.com/JaySmith/cortex-ai/issues/4).
   `CopilotInstaller.install()` is a no-op stub (`cortex/platforms/copilot.py:26`).
+
+- [ ] **OpenCode install: also write the cortex-first rule + cortex tools** —
+  [#5](https://github.com/JaySmith/cortex-ai/issues/5). `OpenCodeInstaller`
+  currently only writes `~/.config/opencode/skills/cortex-ai/SKILL.md`. It
+  should additionally install `opencode/AGENTS.md` (cortex-first lookup rule)
+  to `~/.config/opencode/AGENTS.md` and the `cortex_search`/`cortex_get` custom
+  tools from `opencode/tools/cortex.ts` to `~/.config/opencode/tools/`, with
+  matching `uninstall`/`validate`/`dry_run` coverage.
 </content>
