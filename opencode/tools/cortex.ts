@@ -50,3 +50,32 @@ export const get = tool({
     return runCortex(["memory", "get", args.id])
   },
 })
+
+export const think = tool({
+  description:
+    "Synthesize a rich context bundle for a question from the Cortex vault: primary results at full depth, cross-references, related notes, and gap analysis. " +
+    "Use for a deep 'answer this in one pass' lookup — recommended over search when you want a rounded answer, not just a hit list.",
+  args: {
+    query: tool.schema
+      .string()
+      .describe("Question or topic to synthesize the context for."),
+  },
+  async execute(args) {
+    return runCortex(["memory", "think", args.query])
+  },
+})
+
+export const related = tool({
+  description:
+    "Find notes related to a given note id by shared tags, category, and wiki-link graph adjacency. " +
+    "Use after a search or get result to surface connected notes in the Cortex vault.",
+  args: {
+    id: tool
+      .schema
+      .string()
+      .describe("The note id slug to find related notes for (from a search/get result)."),
+  },
+  async execute(args) {
+    return runCortex(["memory", "related", args.id])
+  },
+})
