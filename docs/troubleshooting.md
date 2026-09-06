@@ -144,7 +144,7 @@ it.
 1. Ensure the cortex-ai skill is installed: `cortex opencode status`
 2. If missing, run `cortex opencode install`
 3. Restart opencode to pick up changes
-4. Verify at the terminal: `cortex memory search "."`
+4. Verify at the terminal: `cortex memory list`
 
 ### Skill not loading in opencode
 

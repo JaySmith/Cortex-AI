@@ -50,7 +50,7 @@ This is suitable for scripts, CI, or automation.
 cortex status           # checks config, vault, encoded output, skill
 cortex doctor           # validates all platform integrations
 cortex version          # print release + schema version
-cortex memory search .  # list all notes in encoded memory
+cortex memory list      # list all notes in encoded memory
 ```
 
 ## Upgrading

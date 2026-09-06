@@ -465,6 +465,246 @@ class TestMemorySearch:
         assert "typescript-style" in result.stdout
 
 
+def _write_memory_json_with_graph(vault_root: Path, notes: dict, graph: dict | None = None) -> Path:
+    """Write a memory.json with optional graph data."""
+    encoded_dir = vault_root / "_sync" / "encoded"
+    encoded_dir.mkdir(parents=True, exist_ok=True)
+    path = encoded_dir / "memory.json"
+    data = {
+        "_meta": {"generated": "2026-01-01T00:00:00", "count": len(notes)},
+        "notes": notes,
+    }
+    if graph is not None:
+        data["_graph"] = graph
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    return path
+
+
+def _result_ids(stdout: str) -> list[str]:
+    """Extract note ids from search output (lines indented with two spaces)."""
+    ids = []
+    for line in stdout.split("\n"):
+        if line.startswith("  ") and "·" in line:
+            ids.append(line.strip().split()[0])
+    return ids
+
+
+class TestMemorySearchImproved:
+    """Tests for tokenized per-term scoring, IDF, tier, recency, and graph boost."""
+
+    def test_multi_word_query(self, vault):
+        """Multi-word query matches notes with terms in separate locations."""
+        _write_memory_json(
+            vault,
+            {
+                "sprint-retro": {
+                    "id": "sprint-retro",
+                    "type": "knowledge",
+                    "category": "patterns",
+                    "tier": "core",
+                    "aliases": [],
+                    "updated": "2026-01-01",
+                    "content": "Hold a sprint retrospective after each sprint.",
+                },
+            },
+        )
+        result = runner.invoke(app, ["memory", "search", "sprint retro", "--vault", str(vault)])
+        assert result.exit_code == 0
+        assert "sprint-retro" in result.stdout
+
+    def test_term_coverage_ranking(self, vault):
+        """Note matching all query terms ranks above note matching only some."""
+        _write_memory_json(
+            vault,
+            {
+                "python-style": {
+                    "id": "python-style",
+                    "type": "feedback",
+                    "tier": "core",
+                    "aliases": [],
+                    "updated": "2026-01-01",
+                    "content": "Use snake_case in Python.",
+                },
+                "python-testing": {
+                    "id": "python-testing",
+                    "type": "knowledge",
+                    "tier": "project",
+                    "aliases": [],
+                    "updated": "2026-01-01",
+                    "content": "Use pytest for Python testing.",
+                },
+            },
+        )
+        result = runner.invoke(app, ["memory", "search", "python testing", "--vault", str(vault)])
+        assert result.exit_code == 0
+        result_ids = _result_ids(result.stdout)
+        assert result_ids[0] == "python-testing"
+
+    def test_idf_rare_term_boosts(self, vault):
+        """A term rare in 1 note scores higher than a term common in all notes."""
+        _write_memory_json(
+            vault,
+            {
+                "common-note": {
+                    "id": "common-note",
+                    "type": "knowledge",
+                    "tier": "core",
+                    "aliases": [],
+                    "updated": "2026-01-01",
+                    "content": "The word project appears in every note here.",
+                },
+                "rare-note": {
+                    "id": "rare-note",
+                    "type": "knowledge",
+                    "tier": "core",
+                    "aliases": [],
+                    "updated": "2026-01-01",
+                    "content": "The word zephyr appears only here.",
+                },
+            },
+        )
+        result = runner.invoke(app, ["memory", "search", "zephyr", "--vault", str(vault)])
+        assert result.exit_code == 0
+        assert "rare-note" in result.stdout
+        assert "common-note" not in result.stdout
+
+    def test_tier_bonus(self, vault):
+        """Core tier note ranks above vault-only for same content match."""
+        _write_memory_json(
+            vault,
+            {
+                "core-note": {
+                    "id": "core-note",
+                    "type": "knowledge",
+                    "tier": "core",
+                    "aliases": [],
+                    "updated": "2026-01-01",
+                    "content": "The word nebula appears in both notes.",
+                },
+                "vault-note": {
+                    "id": "vault-note",
+                    "type": "knowledge",
+                    "tier": "vault-only",
+                    "aliases": [],
+                    "updated": "2026-01-01",
+                    "content": "The word nebula appears in both notes.",
+                },
+            },
+        )
+        result = runner.invoke(app, ["memory", "search", "nebula", "--vault", str(vault)])
+        assert result.exit_code == 0
+        result_ids = _result_ids(result.stdout)
+        assert result_ids[0] == "core-note"
+
+    def test_recency_tiebreaker(self, vault):
+        """Same score — newer updated date wins."""
+        _write_memory_json(
+            vault,
+            {
+                "old-note": {
+                    "id": "old-note",
+                    "type": "knowledge",
+                    "tier": "core",
+                    "aliases": [],
+                    "updated": "2025-01-01",
+                    "content": "Both have the word quasar.",
+                },
+                "new-note": {
+                    "id": "new-note",
+                    "type": "knowledge",
+                    "tier": "core",
+                    "aliases": [],
+                    "updated": "2026-06-01",
+                    "content": "Both have the word quasar.",
+                },
+            },
+        )
+        result = runner.invoke(app, ["memory", "search", "quasar", "--vault", str(vault)])
+        assert result.exit_code == 0
+        result_ids = _result_ids(result.stdout)
+        assert result_ids[0] == "new-note"
+
+    def test_graph_boost(self, vault):
+        """Note linked to a top-3 result gets +2 graph boost."""
+        _write_memory_json_with_graph(
+            vault,
+            {
+                "main-topic": {
+                    "id": "main-topic",
+                    "type": "knowledge",
+                    "tier": "core",
+                    "aliases": [],
+                    "updated": "2026-01-01",
+                    "content": "Core content about the word cipher.",
+                },
+                "linked-topic": {
+                    "id": "linked-topic",
+                    "type": "knowledge",
+                    "tier": "project",
+                    "aliases": [],
+                    "updated": "2026-01-01",
+                    "content": "Mentions cipher briefly.",
+                },
+                "unlinked-topic": {
+                    "id": "unlinked-topic",
+                    "type": "knowledge",
+                    "tier": "project",
+                    "aliases": [],
+                    "updated": "2026-01-01",
+                    "content": "Also mentions cipher briefly.",
+                },
+            },
+            graph={
+                "edges": [["main-topic", "linked-topic"]],
+                "adjacency": {"main-topic": ["linked-topic"], "linked-topic": ["main-topic"]},
+            },
+        )
+        result = runner.invoke(app, ["memory", "search", "cipher", "--vault", str(vault)])
+        assert result.exit_code == 0
+        result_ids = _result_ids(result.stdout)
+        # linked-topic should rank above unlinked-topic due to graph boost
+        assert result_ids.index("linked-topic") < result_ids.index("unlinked-topic")
+
+    def test_snippet_shows_match_context(self, vault):
+        """Snippet contains the matching term, not just first 80 chars."""
+        long_prefix = "word " * 16  # 80 chars of filler before the match
+        _write_memory_json(
+            vault,
+            {
+                "note-with-long-prefix": {
+                    "id": "note-with-long-prefix",
+                    "type": "knowledge",
+                    "tier": "core",
+                    "aliases": [],
+                    "updated": "2026-01-01",
+                    "content": f"{long_prefix}The target word calderon appears here.",
+                },
+            },
+        )
+        result = runner.invoke(app, ["memory", "search", "calderon", "--vault", str(vault)])
+        assert result.exit_code == 0
+        assert "calderon" in result.stdout
+
+    def test_empty_query_terms(self, vault):
+        """Query with only stop words returns no results gracefully."""
+        _write_memory_json(
+            vault,
+            {
+                "some-note": {
+                    "id": "some-note",
+                    "type": "knowledge",
+                    "tier": "core",
+                    "aliases": [],
+                    "updated": "2026-01-01",
+                    "content": "Just a regular note.",
+                },
+            },
+        )
+        result = runner.invoke(app, ["memory", "search", "the and", "--vault", str(vault)])
+        assert result.exit_code == 0
+        assert "No results" in result.stdout
+
+
 # ---------------------------------------------------------------------------
 # cortex memory delete
 # ---------------------------------------------------------------------------

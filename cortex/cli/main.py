@@ -1106,6 +1106,144 @@ def get(
     raise typer.Exit(code=1)
 
 
+# ---------------------------------------------------------------------------
+# Search scoring helpers (shared by search, think, related)
+# ---------------------------------------------------------------------------
+
+_STOP_WORDS_SEARCH = frozenset(
+    """a an and are as at be but by for from has have how if in into is it its of on
+    or that the their then there these this to was were what when where which who will
+    with you your we our not no do does can may""".split()
+)
+
+
+def _tokenize(text: str) -> list[str]:
+    """Lowercase alphanumeric tokens of length >= 3, minus stop words."""
+    tokens = re.findall(r"[a-z0-9]+", text.lower())
+    return [t for t in tokens if len(t) >= 3 and t not in _STOP_WORDS_SEARCH]
+
+
+def _tokenize_query(query: str) -> list[str]:
+    """Tokenize a search query into individual content words."""
+    return _tokenize(query)
+
+
+def _compute_content_idf(notes: dict[str, dict]) -> dict[str, float]:
+    """Inverse-document-frequency for content words across all notes.
+
+    Returns ln(N / df) per word. A word appearing in every note weighs ~0;
+    a word in 1 of 100 notes weighs ~4.6.
+    """
+    n = max(len(notes), 1)
+    df: dict[str, int] = {}
+    for note in notes.values():
+        for word in set(_tokenize(note.get("content", ""))):
+            df[word] = df.get(word, 0) + 1
+    return {w: math.log(n / d) for w, d in df.items()}
+
+
+def _score_note(
+    query_terms: list[str],
+    nid: str,
+    note: dict,
+    idf_cache: dict[str, float] | None = None,
+    adjacency: dict[str, list[str]] | None = None,
+    top_ids: set[str] | None = None,
+) -> int:
+    """Score a note against tokenized query terms.
+
+    Per-term scoring (substring match preserved for prefix/abbreviation support):
+      id contains term         +10
+      alias contains term      +8
+      tag exact match term     +6
+      tag contains term        +3
+      category contains term   +5
+      content contains term    round(idf * 1.5) or 1 if idf unavailable
+
+    Post-term bonuses:
+      completeness            round(matched/total * 5)
+      tier: core +3, skill:* +2, project +0, vault-only -1
+      graph boost             +2 if linked to a top-3 result
+    """
+    total_terms = max(len(query_terms), 1)
+    matched_terms = 0
+    score = 0
+
+    for term in query_terms:
+        term_matched = False
+        if term in nid:
+            score += 10
+            term_matched = True
+        for alias in note.get("aliases", []):
+            if term in alias.lower():
+                score += 8
+                term_matched = True
+                break
+        for tag in note.get("tags", []):
+            tag_lower = tag.lower()
+            if term == tag_lower:
+                score += 6
+                term_matched = True
+            elif term in tag_lower:
+                score += 3
+                term_matched = True
+        if term in note.get("category", "").lower():
+            score += 5
+            term_matched = True
+        if term in note.get("content", "").lower():
+            if idf_cache is not None and term in idf_cache:
+                score += round(idf_cache[term] * 1.5)
+            else:
+                score += 1
+            term_matched = True
+        if term_matched:
+            matched_terms += 1
+
+    if matched_terms == 0:
+        return 0
+
+    # Completeness bonus: reward matching more query terms
+    score += round(matched_terms / total_terms * 5)
+
+    # Tier bonus
+    tier = note.get("tier", "")
+    if tier == "core":
+        score += 3
+    elif tier.startswith("skill:"):
+        score += 2
+    elif tier == "vault-only":
+        score -= 1
+
+    # Graph boost: +2 if linked to a top-3 result
+    if adjacency and top_ids and nid not in top_ids:
+        neighbors = set()
+        for top_id in top_ids:
+            neighbors.update(adjacency.get(top_id, []))
+        if nid in neighbors:
+            score += 2
+
+    return score
+
+
+def _extract_snippet(content: str, query_terms: list[str], window: int = 80) -> str:
+    """Extract a snippet around the first matching query term in content."""
+    if not content:
+        return ""
+    content_lower = content.lower()
+    for term in query_terms:
+        idx = content_lower.find(term)
+        if idx >= 0:
+            start = max(0, idx - window // 4)
+            end = min(len(content), idx + window * 3 // 4)
+            snippet = content[start:end].replace("\n", " ").strip()
+            if start > 0:
+                snippet = "..." + snippet
+            if end < len(content):
+                snippet = snippet + "..."
+            return snippet
+    return content[:80].replace("\n", " ")
+
+
 @memory_app.command()
 def search(
     query: str = typer.Argument(..., help="Search query string"),
@@ -1133,39 +1271,46 @@ def search(
         raise typer.Exit(code=1) from e
 
     notes = data.get("notes", {})
-    query_lower = query.lower()
-    results = []
-    for nid, note in notes.items():
-        score = 0
-        if query_lower in nid:
-            score += 10
-        for alias in note.get("aliases", []):
-            if query_lower in alias.lower():
-                score += 8
-        for tag in note.get("tags", []):
-            if query_lower == tag.lower():
-                score += 6
-            elif query_lower in tag.lower():
-                score += 3
-        if query_lower in note.get("category", "").lower():
-            score += 5
-        if query_lower in note.get("content", "").lower():
-            score += 1
-        if score > 0:
-            results.append((score, nid, note))
-
-    results.sort(key=lambda x: -x[0])
-
-    if not results:
+    query_terms = _tokenize_query(query)
+    if not query_terms:
         typer.echo(f"No results for '{query}'")
         return
 
-    typer.echo(f"Found {len(results)} result(s) for '{query}':\n")
-    for _score, nid, note in results[:20]:
+    idf_cache = _compute_content_idf(notes)
+    graph = data.get("_graph", {})
+    adjacency = graph.get("adjacency", {})
+
+    # Score all notes
+    scored = []
+    for nid, note in notes.items():
+        s = _score_note(query_terms, nid, note, idf_cache=idf_cache)
+        if s > 0:
+            scored.append((s, nid, note))
+
+    # Sort by score desc, then recency desc for ties
+    scored.sort(key=lambda x: (x[0], x[2].get("updated", "0000-00-00")), reverse=True)
+
+    # Graph boost: +2 for notes wiki-linked to a top-3 result
+    if adjacency and scored:
+        top_ids = [nid for _s, nid, _n in scored[:3]]
+        linked = set()
+        for top_id in top_ids:
+            linked.update(adjacency.get(top_id, []))
+        for i, (s, nid, note) in enumerate(scored):
+            if nid in linked:
+                scored[i] = (s + 2, nid, note)
+        scored.sort(key=lambda x: (x[0], x[2].get("updated", "0000-00-00")), reverse=True)
+
+    if not scored:
+        typer.echo(f"No results for '{query}'")
+        return
+
+    typer.echo(f"Found {len(scored)} result(s) for '{query}':\n")
+    for _score, nid, note in scored[:20]:
         aliases = note.get("aliases", [])
         alias = aliases[0] if aliases else nid
         cat = note.get("category", "")
-        snippet = note.get("content", "")[:80].replace("\n", " ")
+        snippet = _extract_snippet(note.get("content", ""), query_terms)
         typer.echo(f"  {nid}  · {note.get('type', '?')}/{cat}  · {alias}")
         if snippet:
             typer.echo(f"    {snippet}...")
@@ -1462,31 +1607,21 @@ def think(
     data, _mem_path = _load_memory_json(vault)
 
     notes: dict[str, dict] = data.get("notes", {})
-    query_lower = query.lower()
+    query_terms = _tokenize_query(query)
     search_limit = max(limit * 2, 10)
+
+    idf_cache = _compute_content_idf(notes)
+    graph = data.get("_graph", {})
+    adjacency = graph.get("adjacency", {})
 
     # Phase 1: broad search
     scored = []
     for nid, note in notes.items():
-        s = 0
-        if query_lower in nid:
-            s += 10
-        for alias in note.get("aliases", []):
-            if query_lower in alias.lower():
-                s += 8
-        for tag in note.get("tags", []):
-            if query_lower == tag.lower():
-                s += 6
-            elif query_lower in tag.lower():
-                s += 3
-        if query_lower in note.get("category", "").lower():
-            s += 5
-        if query_lower in note.get("content", "").lower():
-            s += 1
+        s = _score_note(query_terms, nid, note, idf_cache=idf_cache)
         if s > 0:
             scored.append((s, nid, note))
 
-    scored.sort(key=lambda x: -x[0])
+    scored.sort(key=lambda x: (x[0], x[2].get("updated", "0000-00-00")), reverse=True)
     primary_results = scored[:search_limit]
 
     # Phase 2: full content for top results
@@ -1520,8 +1655,6 @@ def think(
 
     # Phase 4: pull in related notes not already in primary results
     related_ids = set()
-    graph = data.get("_graph", {})
-    adjacency = graph.get("adjacency", {})
     for _s, nid, note in primary_results[:3]:
         note_tags_set = set(note.get("tags", []))
         note_category = note.get("category", "")
