@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from cortex.templates._render import TEMPLATES, apply_template, list_templates, render_template
+from cortex.templates._render import TEMPLATES, apply_core_notes, apply_template, list_templates, render_template
 
 
 class TestListTemplates:
@@ -82,3 +82,55 @@ class TestApplyTemplate:
             vault.mkdir()
             created = apply_template(vault, name)
             assert len(created) > 0, f"Template {name} created nothing"
+
+
+class TestCoreNotes:
+    """Cortex system notes — shipped with every vault via init/install."""
+
+    def test_structure_has_required_rules(self) -> None:
+        from cortex.templates.core_notes import structure
+
+        files = structure()
+        assert "feedback/vault-capture-rules.md" in files
+        assert "feedback/vault-retrieval-priority.md" in files
+
+    def test_all_files_have_frontmatter_and_content(self) -> None:
+        from cortex.templates.core_notes import structure
+
+        for rel, content in structure().items():
+            assert content.startswith("---"), f"{rel} missing frontmatter"
+            assert len(content) > 0, f"{rel} is empty"
+            assert not Path(rel).is_absolute(), f"{rel} is absolute"
+
+    def test_both_rules_are_core_tier(self) -> None:
+        from cortex.templates.core_notes import structure
+
+        for rel, content in structure().items():
+            assert "tier: core" in content, f"{rel} not core tier"
+
+    def test_apply_creates_files(self, tmp_path: Path) -> None:
+        created = apply_core_notes(tmp_path)
+        assert "feedback/vault-capture-rules.md" in created
+        assert "feedback/vault-retrieval-priority.md" in created
+        assert (tmp_path / "feedback" / "vault-capture-rules.md").exists()
+        assert (tmp_path / "feedback" / "vault-retrieval-priority.md").exists()
+
+    def test_apply_skips_existing(self, tmp_path: Path) -> None:
+        from cortex.templates.core_notes import structure
+
+        # Pre-write one rule with custom content
+        target = tmp_path / "feedback" / "vault-capture-rules.md"
+        target.parent.mkdir(parents=True)
+        target.write_text("my custom rules\n")
+
+        created = apply_core_notes(tmp_path)
+        assert "feedback/vault-capture-rules.md" not in created
+        assert "feedback/vault-retrieval-priority.md" in created
+        # Custom content untouched
+        assert target.read_text() == "my custom rules\n"
+
+    def test_dry_run_creates_nothing(self, tmp_path: Path) -> None:
+        created = apply_core_notes(tmp_path, dry_run=True)
+        assert len(created) > 0
+        for rel in created:
+            assert not (tmp_path / rel).exists()

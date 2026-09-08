@@ -457,6 +457,20 @@ def install(
             _record_action(actions_file, "created", str(config_file))
             typer.echo(f"    wrote {config_file}")
 
+    # ---- Core notes (behavior rules every vault should carry) ----
+    from cortex.templates._render import apply_core_notes
+
+    core_created = apply_core_notes(vault_path, dry_run=dry_run)
+    if core_created:
+        if dry_run:
+            typer.echo(f"    [DRY] would write core notes: {', '.join(core_created)}")
+        else:
+            for rel in core_created:
+                _record_action(actions_file, "created", str(vault_path / rel))
+            typer.echo(f"    wrote core notes: {', '.join(core_created)}")
+    else:
+        typer.echo("    core notes already present — skipped")
+
     # ---- [3/4] Skill + first encode ----
     typer.echo("\n==> [3/4] Skill + encode")
     if not dry_run:
@@ -857,7 +871,12 @@ def init(
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview without writing"),
 ) -> None:
     """Initialize a new Cortex vault with starter notes."""
-    from cortex.templates._render import TEMPLATES, apply_template, list_templates
+    from cortex.templates._render import (
+        TEMPLATES,
+        apply_core_notes,
+        apply_template,
+        list_templates,
+    )
 
     vault_path = Path(vault) if vault else Path.cwd()
 
@@ -880,14 +899,24 @@ def init(
     typer.echo(f"==> Cortex init [{mode}] (template: {template})")
     typer.echo(f"    vault: {vault_path}\n")
 
-    created = apply_template(vault_path, template, dry_run=dry_run)
+    core_created = apply_core_notes(vault_path, dry_run=dry_run)
+    template_created = apply_template(vault_path, template, dry_run=dry_run)
 
-    if not created:
-        typer.echo("  No files created (all already exist).")
+    typer.echo("  Core notes:")
+    if core_created:
+        for rel in core_created:
+            typer.echo(f"    Created: {rel}")
     else:
-        for rel in created:
-            typer.echo(f"  Created: {rel}")
-        typer.echo(f"\n  {len(created)} file(s) created.")
+        typer.echo("    (already present — skipped)")
+    typer.echo(f"    {len(core_created)} file(s) written")
+
+    typer.echo(f"\n  Template: {template}")
+    if template_created:
+        for rel in template_created:
+            typer.echo(f"    Created: {rel}")
+    else:
+        typer.echo("    (already present — skipped)")
+    typer.echo(f"    {len(template_created)} file(s) written")
 
     typer.echo("\nNext steps:")
     typer.echo(f"  1. Review and customize the notes in {vault_path}")

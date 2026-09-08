@@ -50,3 +50,25 @@ def apply_template(vault_path: Path, name: str, *, dry_run: bool = False) -> lis
             target.write_text(content, encoding="utf-8")
         created.append(rel)
     return created
+
+
+def apply_core_notes(vault_path: Path, *, dry_run: bool = False) -> list[str]:
+    """Write Cortex system notes (capture rules, retrieval priority) into *vault_path*.
+
+    Called by ``cortex init`` before the user-chosen template, and by
+    ``cortex install`` so the rules ship even for vaults that skip init.
+    Returns a list of relative paths created (or would be created in dry-run
+    mode). Never overwrites an existing file — safe to call on upgrade.
+    """
+    from cortex.templates.core_notes import structure
+
+    created: list[str] = []
+    for rel, content in structure().items():
+        target = vault_path / rel
+        if target.exists():
+            continue
+        if not dry_run:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content, encoding="utf-8")
+        created.append(rel)
+    return created
