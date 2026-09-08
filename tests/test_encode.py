@@ -6,6 +6,7 @@ import pytest
 
 from cortex.encoder.core import (
     VaultNote,
+    _resolve_skill_dirs,
     excluded,
     find_drained_notes,
     hive_eligible,
@@ -16,6 +17,7 @@ from cortex.encoder.core import (
     strip_leading_h1,
     strip_related_section,
     strip_wiki_links,
+    sync_skill_embeds,
     validate_target_config,
     write_file,
 )
@@ -533,3 +535,125 @@ class TestWriteFile:
         assert not p.exists()
         captured = capsys.readouterr()
         assert "[DRY]" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# _resolve_skill_dirs
+# ---------------------------------------------------------------------------
+
+
+class TestResolveSkillDirs:
+    def test_singular_only(self):
+        dirs = _resolve_skill_dirs({"skills_dir": "/a/skills"})
+        assert [str(d) for d in dirs] == ["/a/skills"]
+
+    def test_plural_only(self):
+        dirs = _resolve_skill_dirs({"skill_dirs": ["/a/skills", "/b/skills"]})
+        assert [str(d) for d in dirs] == ["/a/skills", "/b/skills"]
+
+    def test_singular_first_then_plural(self):
+        dirs = _resolve_skill_dirs(
+            {"skills_dir": "/a/skills", "skill_dirs": ["/b/skills"]}
+        )
+        assert [str(d) for d in dirs] == ["/a/skills", "/b/skills"]
+
+    def test_dedupes_preserving_order(self):
+        dirs = _resolve_skill_dirs(
+            {"skills_dir": "/a/skills", "skill_dirs": ["/a/skills", "/b/skills"]}
+        )
+        assert [str(d) for d in dirs] == ["/a/skills", "/b/skills"]
+
+    def test_plural_as_string(self):
+        dirs = _resolve_skill_dirs({"skill_dirs": "/b/skills"})
+        assert [str(d) for d in dirs] == ["/b/skills"]
+
+    def test_empty(self):
+        assert _resolve_skill_dirs({}) == []
+
+    def test_expands_user(self):
+        dirs = _resolve_skill_dirs({"skills_dir": "~/skills"})
+        assert not str(dirs[0]).startswith("~")
+
+
+# ---------------------------------------------------------------------------
+# sync_skill_embeds — multi-dir resolution
+# ---------------------------------------------------------------------------
+
+
+class TestSyncSkillEmbeds:
+    def _note(self, tmp_path, skill):
+        p = tmp_path / f"{skill}-note.md"
+        meta = {
+            "id": f"{skill}-note",
+            "type": "knowledge",
+            "tier": f"skill:{skill}",
+            "aliases": [f"{skill.title()} Note"],
+        }
+        return VaultNote(p, meta, "Encoded body.")
+
+    def test_embeds_into_primary_dir(self, tmp_path):
+        primary = tmp_path / "opencode" / "skills"
+        (primary / "jira").mkdir(parents=True)
+        note = self._note(tmp_path, "jira")
+        written = sync_skill_embeds(
+            [note], {"skills_dir": str(primary)}, strip_links=True, dry=False
+        )
+        assert written == ["jira"]
+        assert (primary / "jira" / "reference.md").exists()
+
+    def test_falls_back_to_secondary_dir(self, tmp_path):
+        primary = tmp_path / "opencode" / "skills"
+        secondary = tmp_path / "claude" / "skills"
+        primary.mkdir(parents=True)
+        (secondary / "graphify").mkdir(parents=True)
+        note = self._note(tmp_path, "graphify")
+        written = sync_skill_embeds(
+            [note],
+            {"skills_dir": str(primary), "skill_dirs": [str(secondary)]},
+            strip_links=True,
+            dry=False,
+        )
+        assert written == ["graphify"]
+        # landed in secondary, not primary
+        assert (secondary / "graphify" / "reference.md").exists()
+        assert not (primary / "graphify").exists()
+
+    def test_primary_wins_when_both_present(self, tmp_path):
+        primary = tmp_path / "opencode" / "skills"
+        secondary = tmp_path / "claude" / "skills"
+        (primary / "jira").mkdir(parents=True)
+        (secondary / "jira").mkdir(parents=True)
+        note = self._note(tmp_path, "jira")
+        sync_skill_embeds(
+            [note],
+            {"skills_dir": str(primary), "skill_dirs": [str(secondary)]},
+            strip_links=True,
+            dry=False,
+        )
+        assert (primary / "jira" / "reference.md").exists()
+        assert not (secondary / "jira" / "reference.md").exists()
+
+    def test_warns_when_missing_everywhere(self, tmp_path, capsys):
+        primary = tmp_path / "opencode" / "skills"
+        secondary = tmp_path / "claude" / "skills"
+        primary.mkdir(parents=True)
+        secondary.mkdir(parents=True)
+        note = self._note(tmp_path, "ghost")
+        written = sync_skill_embeds(
+            [note],
+            {"skills_dir": str(primary), "skill_dirs": [str(secondary)]},
+            strip_links=True,
+            dry=False,
+        )
+        assert written == []
+        out = capsys.readouterr().out
+        assert "skill dir missing" in out
+        # names both searched locations
+        assert str(primary / "ghost") in out
+        assert str(secondary / "ghost") in out
+
+    def test_no_dirs_configured(self, tmp_path, capsys):
+        note = self._note(tmp_path, "jira")
+        written = sync_skill_embeds([note], {}, strip_links=True, dry=False)
+        assert written == []
+        assert "skills_dir" in capsys.readouterr().out

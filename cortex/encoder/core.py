@@ -517,10 +517,40 @@ def sync_core_context(
     return out
 
 
+def _resolve_skill_dirs(cfg: dict) -> list[Path]:
+    """Build an ordered list of skill search dirs.
+
+    Supports both the singular ``skills_dir`` (a string) and the plural
+    ``skill_dirs`` (a list). When both are set, ``skills_dir`` is searched
+    first, then each entry in ``skill_dirs`` in order. Duplicates are removed
+    while preserving order.
+    """
+    dirs: list[Path] = []
+    primary = cfg.get("skills_dir")
+    if primary:
+        dirs.append(Path(primary).expanduser())
+    extra = cfg.get("skill_dirs") or []
+    if isinstance(extra, str):
+        extra = [extra]
+    for d in extra:
+        dirs.append(Path(d).expanduser())
+    # de-dupe, preserve order
+    seen: set[Path] = set()
+    ordered: list[Path] = []
+    for d in dirs:
+        if d not in seen:
+            seen.add(d)
+            ordered.append(d)
+    return ordered
+
+
 def sync_skill_embeds(notes: list[VaultNote], cfg: dict, strip_links: bool, dry: bool) -> list[str]:
-    if not validate_target_config("skills", cfg, ["skills_dir"]):
+    search_dirs = _resolve_skill_dirs(cfg)
+    if not search_dirs:
+        print(
+            "  ERROR: target 'skills' needs 'skills_dir' or 'skill_dirs' — skipping."
+        )
         return []
-    skills_dir = Path(cfg["skills_dir"])
     embed_name = cfg.get("embed_filename", "reference.md")
     by_skill: dict[str, list[VaultNote]] = {}
     for n in notes:
@@ -532,9 +562,12 @@ def sync_skill_embeds(notes: list[VaultNote], cfg: dict, strip_links: bool, dry:
     )
     written: list[str] = []
     for skill, ns in sorted(by_skill.items()):
-        target_dir = skills_dir / skill
-        if not target_dir.exists():
-            print(f"  WARNING: skill dir missing, skipping: {target_dir}")
+        target_dir = next(
+            (d / skill for d in search_dirs if (d / skill).exists()), None
+        )
+        if target_dir is None:
+            searched = ", ".join(str(d / skill) for d in search_dirs)
+            print(f"  WARNING: skill dir missing, skipping: {searched}")
             continue
         ns.sort(key=lambda n: n.name)
         parts: list[str] = [
@@ -761,6 +794,7 @@ def show_config(cfg: dict, cfg_path: Path) -> None:
         "core_context": cc.get("output_file", ""),
         "memory_json": pa.get("output_file", ""),
         "skills_dir": sk.get("skills_dir", ""),
+        "skill_dirs": [str(d) for d in _resolve_skill_dirs(sk)],
         "projects_dir": pr.get("output_dir", ""),
         "hive_enabled": cfg.get("hive", {}).get("enabled", False),
         "hive_hub_url": cfg.get("hive", {}).get("hub_url", ""),

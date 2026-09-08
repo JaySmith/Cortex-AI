@@ -337,6 +337,7 @@ def install(
     projects_dir = encoded_dir / "projects"
     config_file = sync_dir / "cortex.yaml"
     opencode_skills_dir = Path.home() / ".config" / "opencode" / "skills"
+    claude_skills_dir = Path.home() / ".claude" / "skills"
 
     # Install manifest — records everything this run creates/modifies so
     # `cortex uninstall` can cleanly revert.
@@ -428,6 +429,10 @@ def install(
             f"    enabled: true\n"
             f"    type: skill-embed\n"
             f'    skills_dir: "{opencode_skills_dir}"\n'
+            f"    # Extra dirs to search for skill folders (e.g. Claude Desktop /\n"
+            f"    # Orca skills). skills_dir is searched first, then each entry here.\n"
+            f"    skill_dirs:\n"
+            f'      - "{claude_skills_dir}"\n'
             f'    embed_filename: "reference.md"\n'
             f"\n"
             f"  projects:\n"
