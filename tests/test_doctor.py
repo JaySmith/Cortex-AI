@@ -21,12 +21,23 @@ class TestDoctor:
         distilled.mkdir()
         (distilled / "memory.json").write_text('{"notes": {}}')
 
-        # Set up skill file in the expected location under monkeypatched home
-        skills_dir = tmp_path / ".config" / "opencode" / "skills" / "cortex-ai"
+        # Set up OpenCode config dir with all assets the validator checks
+        oc_config = tmp_path / ".config" / "opencode"
+        skills_dir = oc_config / "skills" / "cortex-ai"
         skills_dir.mkdir(parents=True)
         # A loadable OpenCode skill must START with YAML frontmatter.
         (skills_dir / "SKILL.md").write_text(
             "---\nname: cortex-ai\ndescription: test\n---\n\nskill content\n"
+        )
+        # AGENTS.md in skill dir (checked by OpenCode validator)
+        (skills_dir / "AGENTS.md").write_text("# agents\n")
+        # tools/cortex.ts in config dir (checked by OpenCode validator)
+        tools_dir = oc_config / "tools"
+        tools_dir.mkdir(parents=True)
+        (tools_dir / "cortex.ts").write_text("export {}\n")
+        # package.json with required plugin dep (checked by OpenCode validator)
+        (oc_config / "package.json").write_text(
+            '{"dependencies": {"@opencode-ai/plugin": "0.1.0"}}\n'
         )
 
         # Monkeypatch home and paths
